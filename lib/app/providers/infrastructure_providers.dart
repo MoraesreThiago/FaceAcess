@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/use_cases/evaluate_access_use_case.dart';
-import '../../infrastructure/auth_service.dart';
 import '../../infrastructure/face_database.dart';
 import '../../infrastructure/face_recognizer.dart';
 import '../../infrastructure/firebase_database.dart';
@@ -20,12 +19,6 @@ final tabletConfigProvider = FutureProvider<TabletConfig>((ref) async {
   final config = TabletConfig();
   await config.initialize();
   return config;
-});
-
-final authServiceProvider = FutureProvider<AuthService>((ref) async {
-  final service = AuthService();
-  await service.initialize();
-  return service;
 });
 
 final faceDatabaseProvider = FutureProvider<FaceDatabase>((ref) async {

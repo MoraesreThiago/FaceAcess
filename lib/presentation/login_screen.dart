@@ -1,23 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../app/providers/application_providers.dart';
+import '../application/result.dart';
+import '../domain/entities/operator_role.dart';
 import '../domain/entities/user_profile.dart';
-import '../infrastructure/auth_service.dart';
 import '../infrastructure/tablet_config.dart';
 
-class LoginScreen extends StatelessWidget {
-  final AuthService authService;
+class LoginScreen extends ConsumerWidget {
   final TabletConfig tabletConfig;
   final void Function(UserProfile profile) onLogin;
 
   const LoginScreen({
     super.key,
-    required this.authService,
     required this.tabletConfig,
     required this.onLogin,
   });
 
+  /// UserProfile é a entidade legada que o `app.dart` ainda usa para
+  /// roteamento. OperatorRole é o tipo do domínio novo consumido pelo
+  /// `LoginUseCase`. Essa conversão é trivial (1:1) e será eliminada no
+  /// PR que renomear `UserProfile` para `OperatorRole`.
+  OperatorRole _roleFor(UserProfile profile) {
+    switch (profile) {
+      case UserProfile.admin:
+        return OperatorRole.admin;
+      case UserProfile.porta:
+        return OperatorRole.porta;
+    }
+  }
+
   Future<void> _askPassword(
     BuildContext context,
+    WidgetRef ref,
     UserProfile profile,
   ) async {
     final controller = TextEditingController();
@@ -90,7 +105,7 @@ class LoginScreen extends StatelessWidget {
                   ),
                 ),
                 onSubmitted: (_) => _tryLogin(
-                  ctx, profile, controller.text, setDialogState,
+                  ctx, ref, profile, controller.text, setDialogState,
                   (err) => errorText = err,
                 ),
               ),
@@ -104,7 +119,7 @@ class LoginScreen extends StatelessWidget {
             ),
             ElevatedButton(
               onPressed: () => _tryLogin(
-                ctx, profile, controller.text, setDialogState,
+                ctx, ref, profile, controller.text, setDialogState,
                 (err) => errorText = err,
               ),
               style: ElevatedButton.styleFrom(
@@ -124,27 +139,35 @@ class LoginScreen extends StatelessWidget {
     );
   }
 
-  void _tryLogin(
+  Future<void> _tryLogin(
     BuildContext ctx,
+    WidgetRef ref,
     UserProfile profile,
     String password,
     StateSetter setDialogState,
     void Function(String?) setError,
-  ) {
-    final valid = profile == UserProfile.admin
-        ? authService.validateAdmin(password)
-        : authService.validatePorta(password);
+  ) async {
+    // A tela só é mostrada depois que `loginUseCaseProvider` resolveu no
+    // boot (ver `app.dart`), portanto `requireValue` é seguro aqui.
+    final useCase = ref.read(loginUseCaseProvider).requireValue;
+    final result = await useCase.call(
+      role: _roleFor(profile),
+      password: password,
+    );
 
-    if (valid) {
-      Navigator.pop(ctx);
-      onLogin(profile);
-    } else {
-      setDialogState(() => setError('Senha incorreta'));
+    if (!ctx.mounted) return;
+
+    switch (result) {
+      case Success():
+        Navigator.pop(ctx);
+        onLogin(profile);
+      case Err():
+        setDialogState(() => setError('Senha incorreta'));
     }
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0A),
       body: SafeArea(
@@ -215,7 +238,7 @@ class LoginScreen extends StatelessWidget {
                             label: 'Administrador',
                             color: Colors.amberAccent,
                             onTap: () =>
-                                _askPassword(context, UserProfile.admin),
+                                _askPassword(context, ref, UserProfile.admin),
                           ),
                         ),
                         const SizedBox(width: 20),
@@ -226,7 +249,7 @@ class LoginScreen extends StatelessWidget {
                             label: 'Acesso\nPorta',
                             color: Colors.cyanAccent,
                             onTap: () =>
-                                _askPassword(context, UserProfile.porta),
+                                _askPassword(context, ref, UserProfile.porta),
                           ),
                         ),
                       ],
