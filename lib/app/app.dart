@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../application/use_cases/evaluate_access_use_case.dart';
 import '../domain/entities/user_profile.dart';
 import '../infrastructure/access_log_service.dart';
-import '../infrastructure/auth_service.dart';
 import '../infrastructure/face_database.dart';
 import '../infrastructure/face_recognizer.dart';
 import '../infrastructure/firebase_database.dart';
@@ -15,6 +14,7 @@ import '../infrastructure/tts_service.dart';
 import '../presentation/access_screen.dart';
 import '../presentation/login_screen.dart';
 import '../presentation/tablet_setup_screen.dart';
+import 'providers/application_providers.dart';
 import 'providers/bootstrap_providers.dart';
 import 'providers/infrastructure_providers.dart';
 
@@ -81,7 +81,7 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
   Widget build(BuildContext context) {
     final cameras = ref.watch(camerasProvider);
     final tabletConfig = ref.watch(tabletConfigProvider);
-    final authService = ref.watch(authServiceProvider);
+    final loginUseCase = ref.watch(loginUseCaseProvider);
     final faceDatabase = ref.watch(faceDatabaseProvider);
     final firebaseDatabase = ref.watch(firebaseDatabaseProvider);
     final faceRecognizer = ref.watch(faceRecognizerProvider);
@@ -92,7 +92,7 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
     final asyncs = <AsyncValue<Object?>>[
       cameras,
       tabletConfig,
-      authService,
+      loginUseCase,
       faceDatabase,
       faceRecognizer,
       ttsService,
@@ -127,7 +127,6 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
       home = _buildHome(
         cameras: cameras.requireValue,
         tabletConfig: config,
-        authService: authService.requireValue,
         faceDatabase: faceDatabase.requireValue,
         firebaseDatabase: firebaseDatabase,
         faceRecognizer: faceRecognizer.requireValue,
@@ -148,7 +147,6 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
   Widget _buildHome({
     required List<CameraDescription> cameras,
     required TabletConfig tabletConfig,
-    required AuthService authService,
     required FaceDatabase faceDatabase,
     required FirebaseDatabase firebaseDatabase,
     required FaceRecognizer faceRecognizer,
@@ -159,7 +157,6 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
     // 1. Login sempre primeiro
     if (_loggedProfile == null) {
       return LoginScreen(
-        authService: authService,
         tabletConfig: tabletConfig,
         onLogin: _onLogin,
       );

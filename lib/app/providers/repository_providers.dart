@@ -1,19 +1,19 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../domain/repositories/auth_repository.dart';
-import '../../infrastructure/auth/_legacy_auth_repository_adapter.dart';
-import 'infrastructure_providers.dart';
+import '../../infrastructure/auth/shared_prefs_auth_repository.dart';
 
-/// Providers que expõem **contratos de domínio** usando as implementações
-/// legadas por trás de adaptadores.
+/// Providers que expõem **contratos de domínio** em cima das implementações
+/// concretas de infraestrutura.
 ///
-/// No PR #3 apenas [authRepositoryProvider] existe, e ainda não é consumido
-/// por nenhuma tela — ele materializa o fio de ligação `AuthService →
-/// AuthRepository` para validar o contrato. Os demais repositórios
-/// (`FaceRecognitionRepository`, `DoorController` de domínio,
-/// `TabletAssignmentRepository`, etc.) serão adicionados nos PRs seguintes,
-/// conforme cada tela for migrada.
+/// Autenticação usa [SharedPrefsAuthRepository] — substitui o adaptador
+/// legado do PR #3 (já removido). Mantém exatamente as mesmas chaves,
+/// hash e senhas padrão do antigo `AuthService`, então tablets já em uso
+/// continuam fazendo login sem nenhum reset.
 final authRepositoryProvider = FutureProvider<AuthRepository>((ref) async {
-  final authService = await ref.watch(authServiceProvider.future);
-  return LegacyAuthRepositoryAdapter(authService);
+  final prefs = await SharedPreferences.getInstance();
+  final repository = SharedPrefsAuthRepository(prefs);
+  await repository.ensureDefaults();
+  return repository;
 });
