@@ -1,0 +1,48 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    // Flutter plugin applied via settings.gradle
+    id "dev.flutter.flutter-gradle-plugin"
+    id "com.google.gms.google-services"
+}
+
+android {
+    namespace "com.example.faceaccess"
+    compileSdk 36
+    ndkVersion flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+
+    defaultConfig {
+        applicationId "com.example.faceaccess"
+        minSdk 26                   // tflite_flutter requires >= 26
+        targetSdk 36
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    // Prevent Gradle from compressing the TFLite model inside the APK
+    aaptOptions {
+        noCompress "tflite"
+        noCompress "lite"
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.debug  // swap for real keystore in production
+            minifyEnabled false
+            shrinkResources false
+        }
+    }
+}
+
+flutter {
+    source "../.."
+}

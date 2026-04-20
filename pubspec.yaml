@@ -1,0 +1,61 @@
+name: faceaccess
+description: Face recognition access control system for Android tablet
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Camera live preview and frame capture
+  camera: ^0.10.5+9
+
+  # Fast face detection gate (on-device, no network)
+  google_mlkit_face_detection: ^0.11.0
+
+  # FaceNet 512-d via TensorFlow Lite (on-device recognition)
+  tflite_flutter: ^0.12.0
+
+  # MQTT to trigger ESP32 relay
+  mqtt_client: ^10.2.1
+
+  # Firebase — sync entre tablets + logs de acesso
+  firebase_core: ^3.6.0
+  cloud_firestore: ^5.4.4
+
+  # Local embedding storage (fallback offline)
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+
+  # Tablet identity
+  shared_preferences: ^2.3.2
+
+  # Image manipulation for face crop + normalisation
+  image: ^4.1.7
+
+  # App document directory (Hive init)
+  path_provider: ^2.1.2
+
+  # Unique client IDs
+  uuid: ^4.3.3
+
+  # Password hashing
+  crypto: ^3.0.3
+
+  # Text-to-speech for access messages
+  flutter_tts: ^4.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  hive_generator: ^2.0.1
+  build_runner: ^2.4.8
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/models/
+    - assets/logo_bembrasil.png

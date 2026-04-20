@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "185723702704",
+    "project_id": "faceaccessbb-59e98",
+    "storage_bucket": "faceaccessbb-59e98.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:185723702704:android:5ffce4889f7b8a2070da75",
+        "android_client_info": {
+          "package_name": "com.example.faceaccess"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDQ2flUoc1B1ievvlouK0XYza8vyyiqqU0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
