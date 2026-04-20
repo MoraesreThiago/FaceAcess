@@ -47,6 +47,9 @@ dependencies:
   # Text-to-speech for access messages
   flutter_tts: ^4.0.2
 
+  # State management and dependency injection (introduced in refactor PR #1)
+  flutter_riverpod: ^2.5.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

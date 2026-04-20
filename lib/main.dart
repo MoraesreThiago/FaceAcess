@@ -2,6 +2,7 @@ import 'package:camera/camera.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'application/use_cases/evaluate_access_use_case.dart';
 import 'domain/entities/user_profile.dart';
@@ -60,16 +61,18 @@ Future<void> main() async {
   final ttsService = TtsService();
   await ttsService.initialize();
 
-  runApp(FaceAccessApp(
-    cameras: cameras,
-    faceRecognizer: faceRecognizer,
-    evaluateAccess: evaluateAccess,
-    doorController: doorController,
-    ttsService: ttsService,
-    faceDatabase: faceDatabase,
-    firebaseDatabase: firebaseDatabase,
-    tabletConfig: tabletConfig,
-    authService: authService,
+  runApp(ProviderScope(
+    child: FaceAccessApp(
+      cameras: cameras,
+      faceRecognizer: faceRecognizer,
+      evaluateAccess: evaluateAccess,
+      doorController: doorController,
+      ttsService: ttsService,
+      faceDatabase: faceDatabase,
+      firebaseDatabase: firebaseDatabase,
+      tabletConfig: tabletConfig,
+      authService: authService,
+    ),
   ));
 }
 
