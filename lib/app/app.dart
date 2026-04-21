@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/use_cases/evaluate_access_use_case.dart';
-import '../domain/entities/user_profile.dart';
+import '../domain/entities/operator_role.dart';
 import '../infrastructure/access_log_service.dart';
 import '../infrastructure/face_database.dart';
 import '../infrastructure/face_recognizer.dart';
@@ -40,11 +40,11 @@ class FaceAccessApp extends ConsumerStatefulWidget {
 }
 
 class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
-  UserProfile? _loggedProfile;
+  OperatorRole? _loggedProfile;
   bool? _configured;
   bool _syncStarted = false;
 
-  void _onLogin(UserProfile profile) =>
+  void _onLogin(OperatorRole profile) =>
       setState(() => _loggedProfile = profile);
 
   void _onSetupDone() => setState(() => _configured = true);
@@ -163,9 +163,9 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
     }
 
     // 2. Admin → acesso direto, sem precisar configurar o tablet
-    if (_loggedProfile == UserProfile.admin) {
+    if (_loggedProfile == OperatorRole.admin) {
       return _buildAccessScreen(
-        profile: UserProfile.admin,
+        profile: OperatorRole.admin,
         cameras: cameras,
         tabletConfig: tabletConfig,
         faceDatabase: faceDatabase,
@@ -187,7 +187,7 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
 
     // 4. Porta configurado → acesso normal
     return _buildAccessScreen(
-      profile: UserProfile.porta,
+      profile: OperatorRole.porta,
       cameras: cameras,
       tabletConfig: tabletConfig,
       faceDatabase: faceDatabase,
@@ -200,7 +200,7 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
   }
 
   AccessScreen _buildAccessScreen({
-    required UserProfile profile,
+    required OperatorRole profile,
     required List<CameraDescription> cameras,
     required TabletConfig tabletConfig,
     required FaceDatabase faceDatabase,

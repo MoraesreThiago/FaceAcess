@@ -10,7 +10,7 @@ import 'package:image/image.dart' as img;
 
 import '../application/use_cases/evaluate_access_use_case.dart';
 import '../domain/entities/access_decision.dart';
-import '../domain/entities/user_profile.dart';
+import '../domain/entities/operator_role.dart';
 import '../domain/entities/user_role.dart';
 import '../infrastructure/access_log_service.dart';
 import '../infrastructure/face_database.dart';
@@ -32,7 +32,7 @@ class AccessScreen extends StatefulWidget {
   final FirebaseDatabase firebaseDatabase;
   final TabletConfig tabletConfig;
   final AccessLogService accessLogService;
-  final UserProfile profile;
+  final OperatorRole profile;
 
   const AccessScreen({
     super.key,
@@ -540,7 +540,7 @@ class _AccessScreenState extends State<AccessScreen>
   }
 
   Widget _buildBottomButtons() {
-    final isAdmin = widget.profile == UserProfile.admin;
+    final isAdmin = widget.profile == OperatorRole.admin;
 
     return Positioned(
       bottom: 24,
