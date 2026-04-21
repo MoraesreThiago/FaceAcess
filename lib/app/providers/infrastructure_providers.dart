@@ -1,12 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/use_cases/evaluate_access_use_case.dart';
+import '../../domain/entities/tablet_assignment.dart';
+import '../../domain/entities/tablet_identity.dart';
 import '../../infrastructure/face_database.dart';
 import '../../infrastructure/face_recognizer.dart';
 import '../../infrastructure/firebase_database.dart';
 import '../../infrastructure/mqtt_door_controller.dart';
-import '../../infrastructure/tablet_config.dart';
 import '../../infrastructure/tts_service.dart';
+import 'repository_providers.dart';
 
 /// Providers que expõem as classes **legadas** de infraestrutura.
 ///
@@ -15,10 +17,21 @@ import '../../infrastructure/tts_service.dart';
 /// a instância já inicializada, preservando exatamente o comportamento que
 /// existia antes no `main()`.
 
-final tabletConfigProvider = FutureProvider<TabletConfig>((ref) async {
-  final config = TabletConfig();
-  await config.initialize();
-  return config;
+/// Identidade persistente do tablet (PR #6). Materializada a partir do
+/// [tabletConfigRepositoryProvider]. Imutável após o primeiro boot —
+/// invalidar só é necessário depois que o operador renomeia o tablet
+/// via [TabletSetupScreen].
+final tabletIdentityProvider = FutureProvider<TabletIdentity>((ref) async {
+  final repo = await ref.watch(tabletConfigRepositoryProvider.future);
+  return repo.getOrCreateIdentity();
+});
+
+/// Atribuição atual do tablet (unidade / porta). `null` indica que o
+/// tablet ainda não passou pelo setup. Invalidado pelo setup após salvar.
+final tabletAssignmentProvider =
+    FutureProvider<TabletAssignment?>((ref) async {
+  final repo = await ref.watch(tabletConfigRepositoryProvider.future);
+  return repo.getAssignment();
 });
 
 final faceDatabaseProvider = FutureProvider<FaceDatabase>((ref) async {

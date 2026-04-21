@@ -11,14 +11,17 @@ import '../domain/entities/user_role.dart';
 import '../infrastructure/face_database.dart';
 import '../infrastructure/face_recognizer.dart';
 import '../infrastructure/firebase_database.dart';
-import '../infrastructure/tablet_config.dart';
 
 class RegisterScreen extends StatefulWidget {
   final List<CameraDescription> cameras;
   final FaceRecognizer faceRecognizer;
   final FaceDatabase faceDatabase;
   final FirebaseDatabase firebaseDatabase;
-  final TabletConfig tabletConfig;
+
+  /// Unidade em que a pessoa está sendo cadastrada. `null` significa
+  /// "sem restrição de unidade" — comportamento idêntico ao legado
+  /// quando o tablet ainda não tinha setup completo.
+  final String? locationId;
 
   const RegisterScreen({
     super.key,
@@ -26,7 +29,7 @@ class RegisterScreen extends StatefulWidget {
     required this.faceRecognizer,
     required this.faceDatabase,
     required this.firebaseDatabase,
-    required this.tabletConfig,
+    required this.locationId,
   });
 
   @override
@@ -201,7 +204,10 @@ class _RegisterScreenState extends State<RegisterScreen>
         name,
         _capturedEmbeddings,
         role: _selectedRole,
-        allowedUnits: [widget.tabletConfig.unit],
+        allowedUnits:
+            (widget.locationId != null && widget.locationId!.isNotEmpty)
+                ? [widget.locationId!]
+                : const <String>[],
       );
 
       if (mounted) {

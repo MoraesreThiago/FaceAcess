@@ -4,15 +4,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../app/providers/application_providers.dart';
 import '../application/result.dart';
 import '../domain/entities/operator_role.dart';
-import '../infrastructure/tablet_config.dart';
+import '../domain/entities/tablet_assignment.dart';
+import '../domain/entities/tablet_identity.dart';
 
 class LoginScreen extends ConsumerWidget {
-  final TabletConfig tabletConfig;
+  final TabletIdentity identity;
+  final TabletAssignment? assignment;
   final void Function(OperatorRole role) onLogin;
 
   const LoginScreen({
     super.key,
-    required this.tabletConfig,
+    required this.identity,
+    required this.assignment,
     required this.onLogin,
   });
 
@@ -186,9 +189,7 @@ class LoginScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    tabletConfig.name.isNotEmpty
-                        ? tabletConfig.name
-                        : 'Tablet',
+                    identity.name.isNotEmpty ? identity.name : 'Tablet',
                     style: const TextStyle(
                       color: Colors.white24,
                       fontSize: 13,
@@ -246,8 +247,9 @@ class LoginScreen extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.only(bottom: 24),
               child: Text(
-                tabletConfig.unit.isNotEmpty
-                    ? 'Unidade: ${tabletConfig.unit[0].toUpperCase()}${tabletConfig.unit.substring(1)}'
+                (assignment?.locationId != null &&
+                        assignment!.locationId!.isNotEmpty)
+                    ? 'Unidade: ${assignment!.locationId![0].toUpperCase()}${assignment!.locationId!.substring(1)}'
                     : '',
                 style:
                     const TextStyle(color: Colors.white12, fontSize: 12),

@@ -4,12 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/use_cases/evaluate_access_use_case.dart';
 import '../domain/entities/operator_role.dart';
+import '../domain/entities/tablet_assignment.dart';
+import '../domain/entities/tablet_identity.dart';
 import '../infrastructure/access_log_service.dart';
 import '../infrastructure/face_database.dart';
 import '../infrastructure/face_recognizer.dart';
 import '../infrastructure/firebase_database.dart';
 import '../infrastructure/mqtt_door_controller.dart';
-import '../infrastructure/tablet_config.dart';
 import '../infrastructure/tts_service.dart';
 import '../presentation/access_screen.dart';
 import '../presentation/login_screen.dart';
@@ -24,14 +25,14 @@ import 'providers/infrastructure_providers.dart';
 /// 2. Aguardar todos os providers de boot (câmeras + infraestrutura) antes
 ///    de decidir qual tela mostrar.
 /// 3. Disparar a sincronização Firestore → Hive em background, uma única
-///    vez, assim que o boot termina (mesmo comportamento do `main()`
-///    anterior).
+///    vez, assim que o boot termina.
 /// 4. Preservar o roteamento legado: login → (admin direto | porta →
 ///    setup? → access).
 ///
-/// Nenhuma lógica funcional foi alterada neste PR — apenas o ponto onde
-/// ela acontece. A migração real de contratos (AuthRepository,
-/// OperatorRole, TabletAssignment) fica para os PRs seguintes.
+/// PR #6 migrou `TabletConfig` para os pares `TabletIdentity` +
+/// `TabletAssignment`. O routing agora depende de `assignment != null`
+/// (qualquer atribuição já conta como "configurado" para o escopo deste
+/// PR — door-selection UX vem em PR futuro).
 class FaceAccessApp extends ConsumerStatefulWidget {
   const FaceAccessApp({super.key});
 
@@ -41,13 +42,15 @@ class FaceAccessApp extends ConsumerStatefulWidget {
 
 class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
   OperatorRole? _loggedProfile;
-  bool? _configured;
   bool _syncStarted = false;
 
   void _onLogin(OperatorRole profile) =>
       setState(() => _loggedProfile = profile);
 
-  void _onSetupDone() => setState(() => _configured = true);
+  /// Após o setup gravar identity+assignment, a tela invalida os providers
+  /// e o rebuild reage automaticamente. Nada a fazer aqui além de forçar
+  /// o rebuild caso a árvore esteja ativa (defensivo).
+  void _onSetupDone() => setState(() {});
 
   /// Sincroniza Firestore → Hive na inicialização (somente pessoas da
   /// unidade). Mantém o comportamento "fire and forget" original: erros
@@ -80,7 +83,8 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
   @override
   Widget build(BuildContext context) {
     final cameras = ref.watch(camerasProvider);
-    final tabletConfig = ref.watch(tabletConfigProvider);
+    final identity = ref.watch(tabletIdentityProvider);
+    final assignment = ref.watch(tabletAssignmentProvider);
     final loginUseCase = ref.watch(loginUseCaseProvider);
     final faceDatabase = ref.watch(faceDatabaseProvider);
     final firebaseDatabase = ref.watch(firebaseDatabaseProvider);
@@ -91,7 +95,8 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
 
     final asyncs = <AsyncValue<Object?>>[
       cameras,
-      tabletConfig,
+      identity,
+      assignment,
       loginUseCase,
       faceDatabase,
       faceRecognizer,
@@ -110,23 +115,23 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
     } else if (asyncs.any((a) => !a.hasValue)) {
       home = const _SplashScreen();
     } else {
-      final config = tabletConfig.requireValue;
-
-      // Captura o estado inicial de "configurado" apenas uma vez —
-      // depois do setup, o callback `_onSetupDone` assume o controle.
-      _configured ??= config.isConfigured;
+      final identityValue = identity.requireValue;
+      final assignmentValue = assignment.requireValue;
 
       // Dispara a sincronização uma única vez, após todos os providers
-      // terem resolvido.
+      // terem resolvido. Mantém o comportamento do legado: se o tablet
+      // não tem unidade atribuída ainda, passa string vazia (loadAll
+      // então não filtra).
       _startFirestoreSync(
         firebaseDatabase: firebaseDatabase,
         faceDatabase: faceDatabase.requireValue,
-        unit: config.unit,
+        unit: assignmentValue?.locationId ?? '',
       );
 
       home = _buildHome(
         cameras: cameras.requireValue,
-        tabletConfig: config,
+        identity: identityValue,
+        assignment: assignmentValue,
         faceDatabase: faceDatabase.requireValue,
         firebaseDatabase: firebaseDatabase,
         faceRecognizer: faceRecognizer.requireValue,
@@ -146,7 +151,8 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
 
   Widget _buildHome({
     required List<CameraDescription> cameras,
-    required TabletConfig tabletConfig,
+    required TabletIdentity identity,
+    required TabletAssignment? assignment,
     required FaceDatabase faceDatabase,
     required FirebaseDatabase firebaseDatabase,
     required FaceRecognizer faceRecognizer,
@@ -157,7 +163,8 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
     // 1. Login sempre primeiro
     if (_loggedProfile == null) {
       return LoginScreen(
-        tabletConfig: tabletConfig,
+        identity: identity,
+        assignment: assignment,
         onLogin: _onLogin,
       );
     }
@@ -167,7 +174,8 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
       return _buildAccessScreen(
         profile: OperatorRole.admin,
         cameras: cameras,
-        tabletConfig: tabletConfig,
+        identity: identity,
+        assignment: assignment,
         faceDatabase: faceDatabase,
         firebaseDatabase: firebaseDatabase,
         faceRecognizer: faceRecognizer,
@@ -177,10 +185,12 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
       );
     }
 
-    // 3. Porta → precisa configurar nome/unidade se ainda não configurado
-    if (_configured != true) {
+    // 3. Porta → precisa configurar unidade se ainda não há assignment.
+    // No escopo do PR #6, considera-se "configurado" assim que existe
+    // qualquer `TabletAssignment` persistido (doorId ainda é null).
+    if (assignment == null) {
       return TabletSetupScreen(
-        config: tabletConfig,
+        identity: identity,
         onDone: _onSetupDone,
       );
     }
@@ -189,7 +199,8 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
     return _buildAccessScreen(
       profile: OperatorRole.porta,
       cameras: cameras,
-      tabletConfig: tabletConfig,
+      identity: identity,
+      assignment: assignment,
       faceDatabase: faceDatabase,
       firebaseDatabase: firebaseDatabase,
       faceRecognizer: faceRecognizer,
@@ -202,7 +213,8 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
   AccessScreen _buildAccessScreen({
     required OperatorRole profile,
     required List<CameraDescription> cameras,
-    required TabletConfig tabletConfig,
+    required TabletIdentity identity,
+    required TabletAssignment? assignment,
     required FaceDatabase faceDatabase,
     required FirebaseDatabase firebaseDatabase,
     required FaceRecognizer faceRecognizer,
@@ -218,11 +230,12 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
       ttsService: ttsService,
       faceDatabase: faceDatabase,
       firebaseDatabase: firebaseDatabase,
-      tabletConfig: tabletConfig,
+      tabletIdentity: identity,
+      tabletAssignment: assignment,
       accessLogService: AccessLogService(
-        tabletId: tabletConfig.id,
-        tabletName: tabletConfig.name,
-        unit: tabletConfig.unit,
+        tabletId: identity.id,
+        tabletName: identity.name,
+        unit: assignment?.locationId ?? '',
       ),
       profile: profile,
     );

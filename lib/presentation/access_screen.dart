@@ -12,12 +12,13 @@ import '../application/use_cases/evaluate_access_use_case.dart';
 import '../domain/entities/access_decision.dart';
 import '../domain/entities/operator_role.dart';
 import '../domain/entities/user_role.dart';
+import '../domain/entities/tablet_assignment.dart';
+import '../domain/entities/tablet_identity.dart';
 import '../infrastructure/access_log_service.dart';
 import '../infrastructure/face_database.dart';
 import '../infrastructure/face_recognizer.dart';
 import '../infrastructure/firebase_database.dart';
 import '../infrastructure/mqtt_door_controller.dart';
-import '../infrastructure/tablet_config.dart';
 import '../infrastructure/tts_service.dart';
 import 'people_list_screen.dart';
 import 'register_screen.dart';
@@ -30,7 +31,8 @@ class AccessScreen extends StatefulWidget {
   final TtsService ttsService;
   final FaceDatabase faceDatabase;
   final FirebaseDatabase firebaseDatabase;
-  final TabletConfig tabletConfig;
+  final TabletIdentity tabletIdentity;
+  final TabletAssignment? tabletAssignment;
   final AccessLogService accessLogService;
   final OperatorRole profile;
 
@@ -43,7 +45,8 @@ class AccessScreen extends StatefulWidget {
     required this.ttsService,
     required this.faceDatabase,
     required this.firebaseDatabase,
-    required this.tabletConfig,
+    required this.tabletIdentity,
+    required this.tabletAssignment,
     required this.accessLogService,
     required this.profile,
   });
@@ -592,7 +595,7 @@ class _AccessScreenState extends State<AccessScreen>
                         faceRecognizer: widget.faceRecognizer,
                         faceDatabase: widget.faceDatabase,
                         firebaseDatabase: widget.firebaseDatabase,
-                        tabletConfig: widget.tabletConfig,
+                        locationId: widget.tabletAssignment?.locationId,
                       ),
                     ),
                   );

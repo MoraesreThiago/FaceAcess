@@ -1,22 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../infrastructure/tablet_config.dart';
+import '../app/providers/infrastructure_providers.dart';
+import '../app/providers/repository_providers.dart';
+import '../domain/entities/tablet_assignment.dart';
+import '../domain/entities/tablet_identity.dart';
 
-class TabletSetupScreen extends StatefulWidget {
-  final TabletConfig config;
+class TabletSetupScreen extends ConsumerStatefulWidget {
+  final TabletIdentity identity;
   final VoidCallback onDone;
 
   const TabletSetupScreen({
     super.key,
-    required this.config,
+    required this.identity,
     required this.onDone,
   });
 
   @override
-  State<TabletSetupScreen> createState() => _TabletSetupScreenState();
+  ConsumerState<TabletSetupScreen> createState() => _TabletSetupScreenState();
 }
 
-class _TabletSetupScreenState extends State<TabletSetupScreen> {
+class _TabletSetupScreenState extends ConsumerState<TabletSetupScreen> {
   final _nameController = TextEditingController();
   String _selectedUnit = 'araxa';
   bool _saving = false;
@@ -26,13 +30,37 @@ class _TabletSetupScreenState extends State<TabletSetupScreen> {
     {'key': 'perdizes', 'label': 'Perdizes'},
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    // Prefill com o nome atual, se já existir (caso o tablet seja
+    // reconfigurado). Comportamento equivalente ao legado, que também
+    // deixava o campo em branco em setup novo.
+    _nameController.text = widget.identity.name;
+  }
+
   Future<void> _save() async {
-    if (_nameController.text.trim().isEmpty) return;
+    final name = _nameController.text.trim();
+    if (name.isEmpty) return;
     setState(() => _saving = true);
-    await widget.config.save(
-      name: _nameController.text.trim(),
-      unit: _selectedUnit,
+
+    final repo = await ref.read(tabletConfigRepositoryProvider.future);
+    await repo.saveIdentity(
+      TabletIdentity(id: widget.identity.id, name: name),
     );
+    await repo.saveAssignment(
+      TabletAssignment(
+        tabletId: widget.identity.id,
+        locationId: _selectedUnit,
+        // doorId permanece null nesta fase — seleção de porta chega
+        // em PR futuro.
+      ),
+    );
+
+    // Invalida as views — app.dart re-lê e roteia para AccessScreen.
+    ref.invalidate(tabletIdentityProvider);
+    ref.invalidate(tabletAssignmentProvider);
+
     widget.onDone();
   }
 
