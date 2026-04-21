@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../app/flavor.dart';
 import '../app/providers/application_providers.dart';
 import '../application/result.dart';
 import '../domain/entities/operator_role.dart';
@@ -154,6 +155,13 @@ class LoginScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // PR #6.5: cada APK (flavor) só expõe o perfil que lhe pertence.
+    // O flavor é decidido no entrypoint (`main_admin` / `main_porta`),
+    // não pelo operador — por isso o card do outro perfil nem aparece.
+    final flavor = ref.watch(appFlavorProvider);
+    final role = flavor == AppFlavor.admin
+        ? OperatorRole.admin
+        : OperatorRole.porta;
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0A),
       body: SafeArea(
@@ -208,34 +216,36 @@ class LoginScreen extends ConsumerWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text(
-                      'Selecione o perfil de acesso',
-                      style: TextStyle(color: Colors.white38, fontSize: 14),
+                    Text(
+                      role == OperatorRole.admin
+                          ? 'Acesso de administrador'
+                          : 'Acesso porta',
+                      style: const TextStyle(
+                          color: Colors.white38, fontSize: 14),
                     ),
                     const SizedBox(height: 32),
+                    // Um único card — o flavor define qual perfil aparece.
+                    // A outra metade do Row é um Spacer para manter o card
+                    // com a mesma largura dos mockups anteriores (~50% da
+                    // área útil).
                     Row(
                       children: [
-                        // Admin
                         Expanded(
                           child: _ProfileCard(
-                            icon: Icons.admin_panel_settings,
-                            label: 'Administrador',
-                            color: Colors.amberAccent,
-                            onTap: () =>
-                                _askPassword(context, ref, OperatorRole.admin),
+                            icon: role == OperatorRole.admin
+                                ? Icons.admin_panel_settings
+                                : Icons.door_front_door,
+                            label: role == OperatorRole.admin
+                                ? 'Administrador'
+                                : 'Acesso\nPorta',
+                            color: role == OperatorRole.admin
+                                ? Colors.amberAccent
+                                : Colors.cyanAccent,
+                            onTap: () => _askPassword(context, ref, role),
                           ),
                         ),
                         const SizedBox(width: 20),
-                        // Porta
-                        Expanded(
-                          child: _ProfileCard(
-                            icon: Icons.door_front_door,
-                            label: 'Acesso\nPorta',
-                            color: Colors.cyanAccent,
-                            onTap: () =>
-                                _askPassword(context, ref, OperatorRole.porta),
-                          ),
-                        ),
+                        const Spacer(),
                       ],
                     ),
                   ],
