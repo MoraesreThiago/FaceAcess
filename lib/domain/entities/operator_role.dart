@@ -6,10 +6,6 @@
 ///
 /// - [admin]: responsável por cadastros e gerenciamento;
 /// - [porta]: tablet rodando em modo de reconhecimento na portaria.
-///
-/// Criado neste PR para ser usado a partir da Fase 5, quando substituirá
-/// gradualmente o atual `UserProfile`. Intencionalmente ainda não é
-/// referenciado por nenhum código legado.
 enum OperatorRole {
   admin,
   porta,

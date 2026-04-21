@@ -4,12 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../app/providers/application_providers.dart';
 import '../application/result.dart';
 import '../domain/entities/operator_role.dart';
-import '../domain/entities/user_profile.dart';
 import '../infrastructure/tablet_config.dart';
 
 class LoginScreen extends ConsumerWidget {
   final TabletConfig tabletConfig;
-  final void Function(UserProfile profile) onLogin;
+  final void Function(OperatorRole role) onLogin;
 
   const LoginScreen({
     super.key,
@@ -17,23 +16,10 @@ class LoginScreen extends ConsumerWidget {
     required this.onLogin,
   });
 
-  /// UserProfile é a entidade legada que o `app.dart` ainda usa para
-  /// roteamento. OperatorRole é o tipo do domínio novo consumido pelo
-  /// `LoginUseCase`. Essa conversão é trivial (1:1) e será eliminada no
-  /// PR que renomear `UserProfile` para `OperatorRole`.
-  OperatorRole _roleFor(UserProfile profile) {
-    switch (profile) {
-      case UserProfile.admin:
-        return OperatorRole.admin;
-      case UserProfile.porta:
-        return OperatorRole.porta;
-    }
-  }
-
   Future<void> _askPassword(
     BuildContext context,
     WidgetRef ref,
-    UserProfile profile,
+    OperatorRole role,
   ) async {
     final controller = TextEditingController();
     bool obscure = true;
@@ -50,14 +36,14 @@ class LoginScreen extends ConsumerWidget {
           title: Row(
             children: [
               Icon(
-                profile == UserProfile.admin ? Icons.admin_panel_settings : Icons.door_front_door,
-                color: profile == UserProfile.admin
+                role == OperatorRole.admin ? Icons.admin_panel_settings : Icons.door_front_door,
+                color: role == OperatorRole.admin
                     ? Colors.amberAccent
                     : Colors.cyanAccent,
               ),
               const SizedBox(width: 10),
               Text(
-                profile.label,
+                role.label,
                 style: const TextStyle(color: Colors.white, fontSize: 18),
               ),
             ],
@@ -82,7 +68,7 @@ class LoginScreen extends ConsumerWidget {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderSide: BorderSide(
-                      color: profile == UserProfile.admin
+                      color: role == OperatorRole.admin
                           ? Colors.amberAccent
                           : Colors.cyanAccent,
                     ),
@@ -105,7 +91,7 @@ class LoginScreen extends ConsumerWidget {
                   ),
                 ),
                 onSubmitted: (_) => _tryLogin(
-                  ctx, ref, profile, controller.text, setDialogState,
+                  ctx, ref, role, controller.text, setDialogState,
                   (err) => errorText = err,
                 ),
               ),
@@ -119,11 +105,11 @@ class LoginScreen extends ConsumerWidget {
             ),
             ElevatedButton(
               onPressed: () => _tryLogin(
-                ctx, ref, profile, controller.text, setDialogState,
+                ctx, ref, role, controller.text, setDialogState,
                 (err) => errorText = err,
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: profile == UserProfile.admin
+                backgroundColor: role == OperatorRole.admin
                     ? Colors.amber[700]
                     : Colors.cyan[700],
                 foregroundColor: Colors.black,
@@ -142,7 +128,7 @@ class LoginScreen extends ConsumerWidget {
   Future<void> _tryLogin(
     BuildContext ctx,
     WidgetRef ref,
-    UserProfile profile,
+    OperatorRole role,
     String password,
     StateSetter setDialogState,
     void Function(String?) setError,
@@ -150,17 +136,14 @@ class LoginScreen extends ConsumerWidget {
     // A tela só é mostrada depois que `loginUseCaseProvider` resolveu no
     // boot (ver `app.dart`), portanto `requireValue` é seguro aqui.
     final useCase = ref.read(loginUseCaseProvider).requireValue;
-    final result = await useCase.call(
-      role: _roleFor(profile),
-      password: password,
-    );
+    final result = await useCase.call(role: role, password: password);
 
     if (!ctx.mounted) return;
 
     switch (result) {
       case Success():
         Navigator.pop(ctx);
-        onLogin(profile);
+        onLogin(role);
       case Err():
         setDialogState(() => setError('Senha incorreta'));
     }
@@ -238,7 +221,7 @@ class LoginScreen extends ConsumerWidget {
                             label: 'Administrador',
                             color: Colors.amberAccent,
                             onTap: () =>
-                                _askPassword(context, ref, UserProfile.admin),
+                                _askPassword(context, ref, OperatorRole.admin),
                           ),
                         ),
                         const SizedBox(width: 20),
@@ -249,7 +232,7 @@ class LoginScreen extends ConsumerWidget {
                             label: 'Acesso\nPorta',
                             color: Colors.cyanAccent,
                             onTap: () =>
-                                _askPassword(context, ref, UserProfile.porta),
+                                _askPassword(context, ref, OperatorRole.porta),
                           ),
                         ),
                       ],
