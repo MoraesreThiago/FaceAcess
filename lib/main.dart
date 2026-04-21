@@ -1,28 +1,19 @@
-import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'app/app.dart';
-import 'firebase_options.dart';
-
-/// Bootstrap mínimo do app.
+/// Entrypoint *placeholder*.
 ///
-/// Toda a composição de infraestrutura (câmeras, Hive, Firestore, MQTT,
-/// TTS, etc.) foi movida para os providers em `lib/app/providers/`. O
-/// `main` cuida apenas do que **precisa** acontecer antes do Flutter subir:
-/// inicializar bindings, configurar o chrome do sistema (modo kiosk) e
-/// inicializar o Firebase.
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
+/// A partir do PR #6.5 o app é construído em dois flavors distintos
+/// (`admin` e `porta`), cada um com seu próprio entrypoint:
+///
+///   - `lib/main_admin.dart`  →  `flutter run --flavor admin -t lib/main_admin.dart`
+///   - `lib/main_porta.dart`  →  `flutter run --flavor porta -t lib/main_porta.dart`
+///
+/// Este arquivo existe apenas para produzir uma mensagem de erro clara
+/// caso alguém rode `flutter run` sem passar `-t`, o que usaria
+/// `lib/main.dart` por padrão e silenciosamente escolheria um flavor
+/// errado.
+void main() {
+  throw StateError(
+    'Escolha um flavor explicitamente:\n'
+    '  flutter run --flavor admin -t lib/main_admin.dart\n'
+    '  flutter run --flavor porta -t lib/main_porta.dart',
   );
-
-  // Modo kiosk — esconde barra de navegação e status bar.
-  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-  SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
-
-  runApp(const ProviderScope(child: FaceAccessApp()));
 }

@@ -34,6 +34,33 @@ android {
         noCompress "lite"
     }
 
+    // ── Flavors ────────────────────────────────────────────────────────────
+    // PR #6.5: o app é publicado como dois APKs distintos a partir do
+    // mesmo código-fonte.
+    //   - admin : hospeda a UI de gestão (portas, pessoas, matriz de
+    //             acesso). A UI real chega em PRs futuros; por ora o
+    //             flavor apenas existe e o LoginScreen mostra só o card
+    //             de Administrador.
+    //   - porta : dispositivo de parede para reconhecimento facial. Só
+    //             mostra o card "Acesso Porta".
+    // Nada da camada de domínio/aplicação/infra é flavor-specific — tudo
+    // é compartilhado. A diferença é apenas entrypoint + UI visível.
+    flavorDimensions "app"
+    productFlavors {
+        admin {
+            dimension "app"
+            applicationIdSuffix ".admin"
+            versionNameSuffix "-admin"
+            resValue "string", "app_name", "BemBrasil Admin"
+        }
+        porta {
+            dimension "app"
+            applicationIdSuffix ".porta"
+            versionNameSuffix "-porta"
+            resValue "string", "app_name", "BemBrasil Porta"
+        }
+    }
+
     buildTypes {
         release {
             signingConfig signingConfigs.debug  // swap for real keystore in production
