@@ -1,13 +1,16 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 
 import '../application/use_cases/evaluate_access_use_case.dart';
+import '../domain/entities/face_embedding.dart';
 import '../domain/entities/operator_role.dart';
+import '../domain/entities/person.dart';
 import '../domain/entities/tablet_assignment.dart';
 import '../domain/entities/tablet_identity.dart';
+import '../domain/repositories/person_repository.dart';
 import '../infrastructure/access_log_service.dart';
-import '../infrastructure/face_database.dart';
 import '../infrastructure/face_recognizer.dart';
 import '../infrastructure/firebase_database.dart';
 import '../infrastructure/mqtt_door_controller.dart';
@@ -18,21 +21,22 @@ import '../presentation/tablet_setup_screen.dart';
 import 'providers/application_providers.dart';
 import 'providers/bootstrap_providers.dart';
 import 'providers/infrastructure_providers.dart';
+import 'providers/repository_providers.dart';
 
 /// Raiz da aplicação. Responsável por:
 ///
 /// 1. Materializar o `MaterialApp` e o tema.
 /// 2. Aguardar todos os providers de boot (câmeras + infraestrutura) antes
 ///    de decidir qual tela mostrar.
-/// 3. Disparar a sincronização Firestore → Hive em background, uma única
-///    vez, assim que o boot termina.
+/// 3. Disparar a sincronização Firestore → `PersonRepository` em background,
+///    uma única vez, assim que o boot termina.
 /// 4. Preservar o roteamento legado: login → (admin direto | porta →
 ///    setup? → access).
 ///
-/// PR #6 migrou `TabletConfig` para os pares `TabletIdentity` +
-/// `TabletAssignment`. O routing agora depende de `assignment != null`
-/// (qualquer atribuição já conta como "configurado" para o escopo deste
-/// PR — door-selection UX vem em PR futuro).
+/// PR #7: o sync agora escreve no [PersonRepository] (UUID-keyed). Como
+/// o Firestore ainda é keyed por nome (a migração remota é PR #8), o sync
+/// faz um lookup name→Person local para preservar/reutilizar o UUID
+/// estável das pessoas já conhecidas.
 class FaceAccessApp extends ConsumerStatefulWidget {
   const FaceAccessApp({super.key});
 
@@ -43,6 +47,7 @@ class FaceAccessApp extends ConsumerStatefulWidget {
 class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
   OperatorRole? _loggedProfile;
   bool _syncStarted = false;
+  final Uuid _uuid = const Uuid();
 
   void _onLogin(OperatorRole profile) =>
       setState(() => _loggedProfile = profile);
@@ -52,30 +57,60 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
   /// o rebuild caso a árvore esteja ativa (defensivo).
   void _onSetupDone() => setState(() {});
 
-  /// Sincroniza Firestore → Hive na inicialização (somente pessoas da
-  /// unidade). Mantém o comportamento "fire and forget" original: erros
-  /// são silenciosos e o app segue operando pelo cache local do Hive.
+  /// Sincroniza Firestore → `PersonRepository` na inicialização (somente
+  /// pessoas da unidade). "Fire and forget": erros são silenciosos e o
+  /// app segue operando pelo cache local.
+  ///
+  /// Estratégia de UUID durante o sync (enquanto o Firestore continuar
+  /// keyed por nome, até o PR #8):
+  /// - Pessoa já existe localmente com o mesmo `name` → reusa `id` e
+  ///   `createdAt`; embeddings/role são atualizados e o `locationId` do
+  ///   tablet entra no conjunto `locationIds`.
+  /// - Pessoa nova → gera UUID novo, `createdAt = now`, e o `locationId`
+  ///   do tablet é o ponto de partida de `locationIds`.
   void _startFirestoreSync({
     required FirebaseDatabase firebaseDatabase,
-    required FaceDatabase faceDatabase,
+    required PersonRepository personRepository,
     required String unit,
   }) {
     if (_syncStarted) return;
     _syncStarted = true;
     Future(() async {
       try {
-        final people = await firebaseDatabase.loadAll(
+        final remote = await firebaseDatabase.loadAll(
           unit: unit.isNotEmpty ? unit : null,
         );
-        for (final entry in people.entries) {
-          await faceDatabase.savePerson(
-            entry.key,
-            entry.value.embeddings,
-            role: entry.value.role,
+
+        final existing = await personRepository.findAll();
+        final byName = <String, Person>{
+          for (final p in existing) p.name: p,
+        };
+
+        for (final entry in remote.entries) {
+          final name = entry.key;
+          final record = entry.value;
+          final prev = byName[name];
+          final id = prev?.id ?? _uuid.v4();
+          final createdAt = prev?.createdAt ?? DateTime.now().toUtc();
+          final locationIds = <String>{
+            ...(prev?.locationIds ?? const <String>{}),
+            if (unit.isNotEmpty) unit,
+          };
+          await personRepository.save(
+            Person(
+              id: id,
+              name: name,
+              role: record.role,
+              locationIds: locationIds,
+              embeddings: [
+                for (final e in record.embeddings) FaceEmbedding(e),
+              ],
+              createdAt: createdAt,
+            ),
           );
         }
       } catch (_) {
-        // Sem conexão — usa cache local do Hive.
+        // Sem conexão — usa cache local do PersonRepository.
       }
     });
   }
@@ -86,7 +121,7 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
     final identity = ref.watch(tabletIdentityProvider);
     final assignment = ref.watch(tabletAssignmentProvider);
     final loginUseCase = ref.watch(loginUseCaseProvider);
-    final faceDatabase = ref.watch(faceDatabaseProvider);
+    final personRepository = ref.watch(personRepositoryProvider);
     final firebaseDatabase = ref.watch(firebaseDatabaseProvider);
     final faceRecognizer = ref.watch(faceRecognizerProvider);
     final doorController = ref.watch(doorControllerProvider);
@@ -98,7 +133,7 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
       identity,
       assignment,
       loginUseCase,
-      faceDatabase,
+      personRepository,
       faceRecognizer,
       ttsService,
       evaluateAccess,
@@ -118,13 +153,9 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
       final identityValue = identity.requireValue;
       final assignmentValue = assignment.requireValue;
 
-      // Dispara a sincronização uma única vez, após todos os providers
-      // terem resolvido. Mantém o comportamento do legado: se o tablet
-      // não tem unidade atribuída ainda, passa string vazia (loadAll
-      // então não filtra).
       _startFirestoreSync(
         firebaseDatabase: firebaseDatabase,
-        faceDatabase: faceDatabase.requireValue,
+        personRepository: personRepository.requireValue,
         unit: assignmentValue?.locationId ?? '',
       );
 
@@ -132,7 +163,7 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
         cameras: cameras.requireValue,
         identity: identityValue,
         assignment: assignmentValue,
-        faceDatabase: faceDatabase.requireValue,
+        personRepository: personRepository.requireValue,
         firebaseDatabase: firebaseDatabase,
         faceRecognizer: faceRecognizer.requireValue,
         doorController: doorController,
@@ -153,14 +184,13 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
     required List<CameraDescription> cameras,
     required TabletIdentity identity,
     required TabletAssignment? assignment,
-    required FaceDatabase faceDatabase,
+    required PersonRepository personRepository,
     required FirebaseDatabase firebaseDatabase,
     required FaceRecognizer faceRecognizer,
     required MqttDoorController doorController,
     required TtsService ttsService,
     required EvaluateAccessUseCase evaluateAccess,
   }) {
-    // 1. Login sempre primeiro
     if (_loggedProfile == null) {
       return LoginScreen(
         identity: identity,
@@ -169,14 +199,13 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
       );
     }
 
-    // 2. Admin → acesso direto, sem precisar configurar o tablet
     if (_loggedProfile == OperatorRole.admin) {
       return _buildAccessScreen(
         profile: OperatorRole.admin,
         cameras: cameras,
         identity: identity,
         assignment: assignment,
-        faceDatabase: faceDatabase,
+        personRepository: personRepository,
         firebaseDatabase: firebaseDatabase,
         faceRecognizer: faceRecognizer,
         doorController: doorController,
@@ -185,9 +214,6 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
       );
     }
 
-    // 3. Porta → precisa configurar unidade se ainda não há assignment.
-    // No escopo do PR #6, considera-se "configurado" assim que existe
-    // qualquer `TabletAssignment` persistido (doorId ainda é null).
     if (assignment == null) {
       return TabletSetupScreen(
         identity: identity,
@@ -195,13 +221,12 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
       );
     }
 
-    // 4. Porta configurado → acesso normal
     return _buildAccessScreen(
       profile: OperatorRole.porta,
       cameras: cameras,
       identity: identity,
       assignment: assignment,
-      faceDatabase: faceDatabase,
+      personRepository: personRepository,
       firebaseDatabase: firebaseDatabase,
       faceRecognizer: faceRecognizer,
       doorController: doorController,
@@ -215,7 +240,7 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
     required List<CameraDescription> cameras,
     required TabletIdentity identity,
     required TabletAssignment? assignment,
-    required FaceDatabase faceDatabase,
+    required PersonRepository personRepository,
     required FirebaseDatabase firebaseDatabase,
     required FaceRecognizer faceRecognizer,
     required MqttDoorController doorController,
@@ -228,7 +253,7 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
       evaluateAccess: evaluateAccess,
       doorController: doorController,
       ttsService: ttsService,
-      faceDatabase: faceDatabase,
+      personRepository: personRepository,
       firebaseDatabase: firebaseDatabase,
       tabletIdentity: identity,
       tabletAssignment: assignment,

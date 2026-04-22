@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../application/use_cases/evaluate_access_use_case.dart';
 import '../../domain/entities/tablet_assignment.dart';
 import '../../domain/entities/tablet_identity.dart';
-import '../../infrastructure/face_database.dart';
 import '../../infrastructure/face_recognizer.dart';
 import '../../infrastructure/firebase_database.dart';
 import '../../infrastructure/mqtt_door_controller.dart';
@@ -34,12 +33,6 @@ final tabletAssignmentProvider =
   return repo.getAssignment();
 });
 
-final faceDatabaseProvider = FutureProvider<FaceDatabase>((ref) async {
-  final database = FaceDatabase();
-  await database.initialize();
-  return database;
-});
-
 final firebaseDatabaseProvider = Provider<FirebaseDatabase>((ref) {
   return FirebaseDatabase();
 });
@@ -62,6 +55,6 @@ final ttsServiceProvider = FutureProvider<TtsService>((ref) async {
 
 final evaluateAccessUseCaseProvider =
     FutureProvider<EvaluateAccessUseCase>((ref) async {
-  final faceDatabase = await ref.watch(faceDatabaseProvider.future);
-  return EvaluateAccessUseCase(faceDatabase: faceDatabase);
+  final personRepository = await ref.watch(personRepositoryProvider.future);
+  return EvaluateAccessUseCase(personRepository: personRepository);
 });

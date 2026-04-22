@@ -14,8 +14,8 @@ import '../domain/entities/operator_role.dart';
 import '../domain/entities/user_role.dart';
 import '../domain/entities/tablet_assignment.dart';
 import '../domain/entities/tablet_identity.dart';
+import '../domain/repositories/person_repository.dart';
 import '../infrastructure/access_log_service.dart';
-import '../infrastructure/face_database.dart';
 import '../infrastructure/face_recognizer.dart';
 import '../infrastructure/firebase_database.dart';
 import '../infrastructure/mqtt_door_controller.dart';
@@ -29,7 +29,7 @@ class AccessScreen extends StatefulWidget {
   final EvaluateAccessUseCase evaluateAccess;
   final MqttDoorController doorController;
   final TtsService ttsService;
-  final FaceDatabase faceDatabase;
+  final PersonRepository personRepository;
   final FirebaseDatabase firebaseDatabase;
   final TabletIdentity tabletIdentity;
   final TabletAssignment? tabletAssignment;
@@ -43,7 +43,7 @@ class AccessScreen extends StatefulWidget {
     required this.evaluateAccess,
     required this.doorController,
     required this.ttsService,
-    required this.faceDatabase,
+    required this.personRepository,
     required this.firebaseDatabase,
     required this.tabletIdentity,
     required this.tabletAssignment,
@@ -563,7 +563,7 @@ class _AccessScreenState extends State<AccessScreen>
                     context,
                     MaterialPageRoute(
                       builder: (_) => PeopleListScreen(
-                        faceDatabase: widget.faceDatabase,
+                        personRepository: widget.personRepository,
                         firebaseDatabase: widget.firebaseDatabase,
                       ),
                     ),
@@ -593,7 +593,7 @@ class _AccessScreenState extends State<AccessScreen>
                       builder: (_) => RegisterScreen(
                         cameras: widget.cameras,
                         faceRecognizer: widget.faceRecognizer,
-                        faceDatabase: widget.faceDatabase,
+                        personRepository: widget.personRepository,
                         firebaseDatabase: widget.firebaseDatabase,
                         locationId: widget.tabletAssignment?.locationId,
                       ),
