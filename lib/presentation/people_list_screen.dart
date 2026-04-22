@@ -2,18 +2,28 @@ import 'package:flutter/material.dart';
 
 import '../domain/entities/person.dart';
 import '../domain/entities/user_role.dart';
+import '../domain/repositories/door_repository.dart';
+import '../domain/repositories/location_repository.dart';
 import '../domain/repositories/person_repository.dart';
 import '../infrastructure/firebase_database.dart';
+import 'admin/doors/door_management_screen.dart';
+import 'admin/locations/location_management_screen.dart';
 
 /// Lista e remove pessoas cadastradas. A partir do PR #7 opera sobre o
 /// [PersonRepository] (UUID-keyed) em vez do antigo `FaceDatabase`.
 class PeopleListScreen extends StatefulWidget {
   final PersonRepository personRepository;
   final FirebaseDatabase firebaseDatabase;
+  final LocationRepository locationRepository;
+  final DoorRepository doorRepository;
+  final bool showStructureManagement;
   const PeopleListScreen({
     super.key,
     required this.personRepository,
     required this.firebaseDatabase,
+    required this.locationRepository,
+    required this.doorRepository,
+    required this.showStructureManagement,
   });
 
   @override
@@ -85,6 +95,31 @@ class _PeopleListScreenState extends State<PeopleListScreen> {
     }
   }
 
+  Future<void> _openLocations() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LocationManagementScreen(
+          locationRepository: widget.locationRepository,
+          doorRepository: widget.doorRepository,
+          personRepository: widget.personRepository,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openDoors() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DoorManagementScreen(
+          locationRepository: widget.locationRepository,
+          doorRepository: widget.doorRepository,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final searchLower = _search.toLowerCase();
@@ -121,6 +156,18 @@ class _PeopleListScreenState extends State<PeopleListScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          if (widget.showStructureManagement) ...[
+            IconButton(
+              tooltip: 'Gerenciar unidades',
+              onPressed: _openLocations,
+              icon: const Icon(Icons.apartment_outlined),
+            ),
+            IconButton(
+              tooltip: 'Gerenciar portas',
+              onPressed: _openDoors,
+              icon: const Icon(Icons.door_front_door_outlined),
+            ),
+          ],
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: Center(

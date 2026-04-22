@@ -2,9 +2,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../domain/repositories/auth_repository.dart';
+import '../../domain/repositories/door_repository.dart';
+import '../../domain/repositories/location_repository.dart';
 import '../../domain/repositories/person_repository.dart';
 import '../../domain/repositories/tablet_config_repository.dart';
 import '../../infrastructure/auth/shared_prefs_auth_repository.dart';
+import '../../infrastructure/persistence/firebase/firestore_door_repository.dart';
+import '../../infrastructure/persistence/firebase/firestore_location_repository.dart';
 import '../../infrastructure/persistence/hive/hive_person_repository.dart';
 import '../../infrastructure/tablet/shared_prefs_tablet_config_repository.dart';
 
@@ -39,4 +43,14 @@ final personRepositoryProvider = FutureProvider<PersonRepository>((ref) async {
   final repository = HivePersonRepository(prefs: prefs);
   await repository.initialize();
   return repository;
+});
+
+/// Unidades geridas no Firestore para uso administrativo (PR #11).
+final locationRepositoryProvider = Provider<LocationRepository>((ref) {
+  return FirestoreLocationRepository();
+});
+
+/// Portas geridas no Firestore para uso administrativo (PR #11).
+final doorRepositoryProvider = Provider<DoorRepository>((ref) {
+  return FirestoreDoorRepository();
 });
