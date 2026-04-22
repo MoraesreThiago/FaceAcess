@@ -2,6 +2,8 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../app/flavor.dart';
+import '../app/providers/repository_providers.dart';
 import '../application/use_cases/evaluate_access_use_case.dart';
 import '../domain/entities/operator_role.dart';
 import '../domain/entities/tablet_assignment.dart';
@@ -51,6 +53,9 @@ class AccessScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final flavor = ref.watch(appFlavorProvider);
+    final locationRepository = ref.watch(locationRepositoryProvider);
+    final doorRepository = ref.watch(doorRepositoryProvider);
     final controllerConfig = AccessControllerConfig(
       cameras: cameras,
       faceRecognizer: faceRecognizer,
@@ -61,7 +66,8 @@ class AccessScreen extends ConsumerWidget {
     );
     final controller = ref.watch(accessControllerProvider(controllerConfig));
     final state = controller.state;
-    final isAdmin = profile == OperatorRole.admin;
+    final isAdmin =
+        profile == OperatorRole.admin && flavor == AppFlavor.admin;
 
     Future<void> openPeopleList() async {
       await controller.pauseCamera();
@@ -73,6 +79,9 @@ class AccessScreen extends ConsumerWidget {
           builder: (_) => PeopleListScreen(
             personRepository: personRepository,
             firebaseDatabase: firebaseDatabase,
+            locationRepository: locationRepository,
+            doorRepository: doorRepository,
+            showStructureManagement: isAdmin,
           ),
         ),
       );
