@@ -6,12 +6,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
-import 'package:image/image.dart' as img;
 
 import '../../application/use_cases/evaluate_access_use_case.dart';
 import '../../domain/entities/access_decision.dart';
 import '../../domain/entities/user_role.dart';
 import '../../infrastructure/access_log_service.dart';
+import '../../infrastructure/face/camera_frame_payload.dart';
+import '../../infrastructure/face/face_image_preprocessor.dart';
 import '../../infrastructure/face_recognizer.dart';
 import '../../infrastructure/mqtt_door_controller.dart';
 import '../../infrastructure/tts_service.dart';
@@ -148,6 +149,7 @@ class AccessController extends ChangeNotifier {
   String? _lastOverlayKey;
   Timer? _overlayHideTimer;
   Timer? _overlayClearTimer;
+  Uint8List? _nv21Buffer;
 
   static String greetingFor(DateTime time) {
     final hour = time.hour;
@@ -232,7 +234,8 @@ class AccessController extends ChangeNotifier {
     final controller = _state.cameraController;
     if (controller == null) return;
 
-    final inputImage = _toInputImage(image, controller);
+    final framePayload = CameraFramePayload.fromCameraImage(image);
+    final inputImage = _toInputImage(framePayload, controller);
     final faces = await _detector.processImage(inputImage);
 
     if (faces.isEmpty) {
@@ -250,16 +253,12 @@ class AccessController extends ChangeNotifier {
       (a, b) => a.boundingBox.width > b.boundingBox.width ? a : b,
     );
 
-    final rawImage = _yuv420ToImage(image);
-    final sensorCrop = _cropFace(rawImage, face.boundingBox);
-    if (sensorCrop == null) return;
-
-    final faceImage = _rotateForDisplay(
-      sensorCrop,
-      controller.description.sensorOrientation,
+    final embedding = await _extractEmbedding(
+      frame: framePayload,
+      face: face,
+      rotationDegrees: controller.description.sensorOrientation,
+      cropStrategy: FaceCropStrategy.cropThenRotate,
     );
-
-    final embedding = await faceRecognizer.getEmbedding(faceImage);
     if (embedding == null) return;
 
     final decision = await evaluateAccess.execute(embedding);
@@ -350,7 +349,8 @@ class AccessController extends ChangeNotifier {
     final controller = _state.cameraController;
     if (controller == null) return AccessDecision.denied();
 
-    final inputImage = _toInputImage(frame, controller);
+    final framePayload = CameraFramePayload.fromCameraImage(frame);
+    final inputImage = _toInputImage(framePayload, controller);
     final faces = await _detector.processImage(inputImage);
 
     if (faces.isEmpty) {
@@ -360,17 +360,13 @@ class AccessController extends ChangeNotifier {
     final face = faces.reduce(
       (a, b) => a.boundingBox.width > b.boundingBox.width ? a : b,
     );
-    final rawImage = _yuv420ToImage(frame);
-    final orientedImage = _rotateForDisplay(
-      rawImage,
-      _computeRotationDeg(controller),
-    );
-    final faceImage = _cropFace(orientedImage, face.boundingBox);
-    if (faceImage == null) {
-      return AccessDecision.denied();
-    }
 
-    final embedding = await faceRecognizer.getEmbedding(faceImage);
+    final embedding = await _extractEmbedding(
+      frame: framePayload,
+      face: face,
+      rotationDegrees: _computeRotationDeg(controller),
+      cropStrategy: FaceCropStrategy.rotateThenCrop,
+    );
     if (embedding == null) {
       return AccessDecision.denied();
     }
@@ -491,98 +487,48 @@ class AccessController extends ChangeNotifier {
         : (sensorDeg - deviceDeg + 360) % 360;
   }
 
-  InputImage _toInputImage(CameraImage image, CameraController controller) {
+  Future<List<double>?> _extractEmbedding({
+    required CameraFramePayload frame,
+    required Face face,
+    required int rotationDegrees,
+    required FaceCropStrategy cropStrategy,
+  }) async {
+    final inputTensor = await preprocessFaceTensorOnIsolate(
+      FacePreprocessingRequest(
+        frame: frame,
+        cropRect: FaceCropRect(
+          left: face.boundingBox.left,
+          top: face.boundingBox.top,
+          width: face.boundingBox.width,
+          height: face.boundingBox.height,
+        ),
+        rotationDegrees: rotationDegrees,
+        cropStrategy: cropStrategy,
+        targetSize: FaceRecognizer.inputSize,
+      ),
+    );
+    if (inputTensor == null) return null;
+    return faceRecognizer.getEmbeddingFromInputTensor(inputTensor);
+  }
+
+  InputImage _toInputImage(
+    CameraFramePayload frame,
+    CameraController controller,
+  ) {
     final rotDeg = _computeRotationDeg(controller);
     final rotation = InputImageRotationValue.fromRawValue(rotDeg) ??
         InputImageRotation.rotation0deg;
-
-    final width = image.width;
-    final height = image.height;
-    final yPlane = image.planes[0];
-    final uPlane = image.planes[1];
-    final vPlane = image.planes[2];
-    final uvRowStride = uPlane.bytesPerRow;
-    final uvPixelStride = uPlane.bytesPerPixel ?? 1;
-
-    final nv21 = Uint8List(width * height + width * height ~/ 2);
-
-    for (int row = 0; row < height; row++) {
-      nv21.setRange(
-        row * width,
-        row * width + width,
-        yPlane.bytes,
-        row * yPlane.bytesPerRow,
-      );
-    }
-
-    int uvOffset = width * height;
-    for (int row = 0; row < height ~/ 2; row++) {
-      for (int col = 0; col < width ~/ 2; col++) {
-        final index = row * uvRowStride + col * uvPixelStride;
-        nv21[uvOffset++] = vPlane.bytes[index];
-        nv21[uvOffset++] = uPlane.bytes[index];
-      }
-    }
+    _nv21Buffer = buildNv21Bytes(frame, buffer: _nv21Buffer);
 
     return InputImage.fromBytes(
-      bytes: nv21,
+      bytes: _nv21Buffer!,
       metadata: InputImageMetadata(
-        size: ui.Size(width.toDouble(), height.toDouble()),
+        size: ui.Size(frame.width.toDouble(), frame.height.toDouble()),
         rotation: rotation,
         format: InputImageFormat.nv21,
-        bytesPerRow: width,
+        bytesPerRow: frame.width,
       ),
     );
-  }
-
-  img.Image _rotateForDisplay(img.Image source, int degrees) {
-    if (degrees == 0) return source;
-    return img.copyRotate(source, angle: degrees);
-  }
-
-  img.Image? _cropFace(img.Image source, Rect box) {
-    final x = box.left.toInt().clamp(0, source.width - 1);
-    final y = box.top.toInt().clamp(0, source.height - 1);
-    final width = box.width.toInt().clamp(1, source.width - x);
-    final height = box.height.toInt().clamp(1, source.height - y);
-    if (width <= 0 || height <= 0) return null;
-    return img.copyCrop(source, x: x, y: y, width: width, height: height);
-  }
-
-  img.Image _yuv420ToImage(CameraImage cameraImage) {
-    final width = cameraImage.width;
-    final height = cameraImage.height;
-
-    final yPlane = cameraImage.planes[0];
-    final uPlane = cameraImage.planes[1];
-    final vPlane = cameraImage.planes[2];
-
-    final yBuf = yPlane.bytes;
-    final uBuf = uPlane.bytes;
-    final vBuf = vPlane.bytes;
-
-    final yRowStride = yPlane.bytesPerRow;
-    final uvRowStride = uPlane.bytesPerRow;
-    final uvPixelStride = uPlane.bytesPerPixel ?? 1;
-
-    final output = img.Image(width: width, height: height);
-
-    for (int y = 0; y < height; y++) {
-      for (int x = 0; x < width; x++) {
-        final yVal = yBuf[y * yRowStride + x];
-        final uvIndex = (y ~/ 2) * uvRowStride + (x ~/ 2) * uvPixelStride;
-        final uVal = uBuf[uvIndex] - 128;
-        final vVal = vBuf[uvIndex] - 128;
-
-        final r = (yVal + 1.402 * vVal).round().clamp(0, 255);
-        final g =
-            (yVal - 0.344136 * uVal - 0.714136 * vVal).round().clamp(0, 255);
-        final b = (yVal + 1.772 * uVal).round().clamp(0, 255);
-
-        output.setPixelRgb(x, y, r, g, b);
-      }
-    }
-    return output;
   }
 
   Future<void> _disposeCameraController(CameraController controller) async {

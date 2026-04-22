@@ -8,7 +8,7 @@ class FaceRecognizer {
   Interpreter? _interpreter;
   int _embeddingSize = 512;
 
-  static const int _inputSize = 160;
+  static const int inputSize = 160;
 
   Future<void> initialize() async {
     final options = InterpreterOptions()..threads = 2;
@@ -27,33 +27,44 @@ class FaceRecognizer {
     if (_interpreter == null) return null;
 
     final resized =
-        img.copyResize(faceImage, width: _inputSize, height: _inputSize);
+        img.copyResize(faceImage, width: inputSize, height: inputSize);
+    return getEmbeddingFromInputTensor(_buildInputTensor(resized));
+  }
 
-    // Build flat Float32List input [1 * 160 * 160 * 3], normalised to [-1, 1]
-    final inputData = Float32List(1 * _inputSize * _inputSize * 3);
+  Future<List<double>?> getEmbeddingFromInputTensor(
+      Float32List inputData) async {
+    if (_interpreter == null) return null;
+
+    const expectedLength = 1 * inputSize * inputSize * 3;
+    if (inputData.length != expectedLength) return null;
+
+    final outputData = Float32List(_embeddingSize);
+    _interpreter!.getInputTensor(0).setTo(inputData);
+    _interpreter!.invoke();
+    final raw = _interpreter!.getOutputTensor(0).data.buffer.asFloat32List();
+    outputData.setAll(0, raw.take(_embeddingSize));
+    return _l2Normalize(outputData.map((v) => v.toDouble()).toList());
+  }
+
+  Float32List _buildInputTensor(img.Image resized) {
+    final inputData = Float32List(1 * inputSize * inputSize * 3);
     int idx = 0;
-    for (int y = 0; y < _inputSize; y++) {
-      for (int x = 0; x < _inputSize; x++) {
+    for (int y = 0; y < inputSize; y++) {
+      for (int x = 0; x < inputSize; x++) {
         final pixel = resized.getPixel(x, y);
         inputData[idx++] = (pixel.r.toDouble() - 127.5) / 128.0;
         inputData[idx++] = (pixel.g.toDouble() - 127.5) / 128.0;
         inputData[idx++] = (pixel.b.toDouble() - 127.5) / 128.0;
       }
     }
-
-    final outputData = Float32List(_embeddingSize);
-
-    _interpreter!.getInputTensor(0).setTo(inputData);
-    _interpreter!.invoke();
-    final raw = _interpreter!.getOutputTensor(0).data.buffer.asFloat32List();
-    outputData.setAll(0, raw.take(_embeddingSize));
-
-    return _l2Normalize(outputData.map((v) => v.toDouble()).toList());
+    return inputData;
   }
 
   List<double> _l2Normalize(List<double> v) {
     double norm = 0;
-    for (final x in v) norm += x * x;
+    for (final x in v) {
+      norm += x * x;
+    }
     norm = sqrt(norm);
     if (norm == 0) return v;
     return v.map((x) => x / norm).toList();
