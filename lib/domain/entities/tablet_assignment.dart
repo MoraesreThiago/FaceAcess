@@ -21,7 +21,11 @@ class TabletAssignment {
     this.locationId,
   });
 
-  bool get isConfigured => doorId != null && locationId != null;
+  bool get isConfigured =>
+      doorId != null &&
+      doorId!.isNotEmpty &&
+      locationId != null &&
+      locationId!.isNotEmpty;
 
   TabletAssignment copyWith({
     String? doorId,

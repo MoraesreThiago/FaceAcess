@@ -4,7 +4,18 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 class AccessTopBar extends StatefulWidget {
-  const AccessTopBar({super.key});
+  const AccessTopBar({
+    super.key,
+    required this.tabletName,
+    required this.assignmentConfigured,
+    this.locationName,
+    this.doorName,
+  });
+
+  final String tabletName;
+  final bool assignmentConfigured;
+  final String? locationName;
+  final String? doorName;
 
   @override
   State<AccessTopBar> createState() => _AccessTopBarState();
@@ -35,7 +46,7 @@ class _AccessTopBarState extends State<AccessTopBar> {
 
   @override
   Widget build(BuildContext context) {
-    final weekdays = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+    final weekdays = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab', 'Dom'];
     final months = [
       'Jan',
       'Fev',
@@ -56,6 +67,7 @@ class _AccessTopBarState extends State<AccessTopBar> {
     final minute = _now.minute.toString().padLeft(2, '0');
     final isPortrait =
         MediaQuery.of(context).orientation == Orientation.portrait;
+    final assignmentLabel = _buildAssignmentLabel();
 
     return Positioned(
       top: 0,
@@ -89,25 +101,10 @@ class _AccessTopBarState extends State<AccessTopBar> {
                             child: Center(
                               child: Transform.translate(
                                 offset: const Offset(-20, 0),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.shield,
-                                      color: Colors.white,
-                                      size: 16,
-                                    ),
-                                    SizedBox(width: 6),
-                                    Text(
-                                      'FACE ACCESS',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 2,
-                                      ),
-                                    ),
-                                  ],
+                                child: _BrandBlock(
+                                  tabletName: widget.tabletName,
+                                  assignmentLabel: assignmentLabel,
+                                  compact: true,
                                 ),
                               ),
                             ),
@@ -155,26 +152,10 @@ class _AccessTopBarState extends State<AccessTopBar> {
                       Expanded(
                         child: Transform.translate(
                           offset: const Offset(-29, -25),
-                          child: const Center(
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.shield,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                                SizedBox(width: 8),
-                                Text(
-                                  'FACE ACCESS',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 2,
-                                  ),
-                                ),
-                              ],
+                          child: Center(
+                            child: _BrandBlock(
+                              tabletName: widget.tabletName,
+                              assignmentLabel: assignmentLabel,
                             ),
                           ),
                         ),
@@ -212,6 +193,91 @@ class _AccessTopBarState extends State<AccessTopBar> {
           ),
         ),
       ),
+    );
+  }
+
+  String _buildAssignmentLabel() {
+    if (!widget.assignmentConfigured) {
+      return 'Vinculacao pendente';
+    }
+
+    final locationName = widget.locationName?.trim();
+    final doorName = widget.doorName?.trim();
+
+    if (locationName != null &&
+        locationName.isNotEmpty &&
+        doorName != null &&
+        doorName.isNotEmpty) {
+      return '$locationName • $doorName';
+    }
+
+    if (doorName != null && doorName.isNotEmpty) {
+      return doorName;
+    }
+
+    if (locationName != null && locationName.isNotEmpty) {
+      return locationName;
+    }
+
+    return 'Vinculacao pendente';
+  }
+}
+
+class _BrandBlock extends StatelessWidget {
+  const _BrandBlock({
+    required this.tabletName,
+    required this.assignmentLabel,
+    this.compact = false,
+  });
+
+  final String tabletName;
+  final String assignmentLabel;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.shield,
+              color: Colors.white,
+              size: compact ? 16 : 20,
+            ),
+            SizedBox(width: compact ? 6 : 8),
+            Text(
+              'FACE ACCESS',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: compact ? 15 : 18,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 2,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          tabletName.isEmpty ? 'Tablet' : tabletName,
+          style: TextStyle(
+            color: Colors.white70,
+            fontSize: compact ? 11 : 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          assignmentLabel,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white54,
+            fontSize: compact ? 10 : 11,
+          ),
+        ),
+      ],
     );
   }
 }

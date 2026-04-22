@@ -7,6 +7,7 @@ class AccessBottomBar extends StatelessWidget {
     required this.isRecognizing,
     this.onShowPeople,
     this.onRegister,
+    this.onConfigureTablet,
     required this.onRecognize,
   });
 
@@ -14,6 +15,7 @@ class AccessBottomBar extends StatelessWidget {
   final bool isRecognizing;
   final Future<void> Function()? onShowPeople;
   final Future<void> Function()? onRegister;
+  final Future<void> Function()? onConfigureTablet;
   final Future<void> Function() onRecognize;
 
   @override
@@ -46,6 +48,23 @@ class AccessBottomBar extends StatelessWidget {
                 onPressed: onRegister == null ? null : () => onRegister!(),
                 icon: const Icon(Icons.person_add, size: 18),
                 label: const Text('Cadastrar'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black54,
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: Colors.white30),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 14,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              ElevatedButton.icon(
+                onPressed: onConfigureTablet == null
+                    ? null
+                    : () => onConfigureTablet!(),
+                icon: const Icon(Icons.settings_input_component, size: 18),
+                label: const Text('Vincular'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.black54,
                   foregroundColor: Colors.white,

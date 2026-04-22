@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../domain/entities/door.dart';
+import '../../domain/entities/location.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../domain/repositories/door_repository.dart';
 import '../../domain/repositories/location_repository.dart';
@@ -53,4 +55,18 @@ final locationRepositoryProvider = Provider<LocationRepository>((ref) {
 /// Portas geridas no Firestore para uso administrativo (PR #11).
 final doorRepositoryProvider = Provider<DoorRepository>((ref) {
   return FirestoreDoorRepository();
+});
+
+/// Lookup pontual de unidade por id para telas que exibem contexto
+/// do assignment sem precisar carregar toda a lista.
+final locationByIdProvider =
+    FutureProvider.family<Location?, String>((ref, id) async {
+  final repository = ref.watch(locationRepositoryProvider);
+  return repository.findById(id);
+});
+
+/// Lookup pontual de porta por id para composição das telas operacionais.
+final doorByIdProvider = FutureProvider.family<Door?, String>((ref, id) async {
+  final repository = ref.watch(doorRepositoryProvider);
+  return repository.findById(id);
 });

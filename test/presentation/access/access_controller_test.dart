@@ -190,7 +190,10 @@ class _FakeAccessLogService implements AccessLogService {
   String get tabletName => 'Tablet 1';
 
   @override
-  String get unit => 'araxa';
+  String get locationId => 'araxa';
+
+  @override
+  String get doorId => 'porta-principal';
 
   @override
   Future<void> log({
