@@ -13,7 +13,7 @@
 - **Duas unidades:** Araxá (~300 pessoas) e Perdizes (~1000).
 - **Stack:** Flutter/Dart 3.3+, Riverpod, Hive (local), Firestore (sync remoto), MQTT (relé ESP32), ML Kit + TFLite FaceNet 512-d.
 - **Arquitetura:** Clean architecture frouxa (`domain/` / `application/` / `infrastructure/` / `presentation/`), composition root em `lib/app/providers/`.
-- **Estado atual:** em refatoração disciplinada por PRs sequenciais. PR #1 a **PR #7 já em `main`**. Próximo: **PR #8**.
+- **Estado atual:** em refatoração disciplinada por PRs sequenciais. PR #1 a **PR #8 já em `main`**. Próximo: **PR #9**.
 
 Para o contexto completo, leia `docs/HANDOFF.md` se existir; caso contrário, leia a seção **Estado atual** abaixo e consulte o histórico do git (`git log --oneline`).
 
@@ -163,7 +163,7 @@ Stubs de UUID em teste: implementam `Uuid` via `noSuchMethod` (ver `_FixedUuid` 
 
 ## 7. Estado atual (atualize quando mergear um PR)
 
-**Último PR merged em `main`:** PR #7 (`fda0d1d` — Merge PR #7: refactor(persistence): replace FaceDatabase with HivePersonRepository and UUID-based people storage).
+**Último PR merged em `main`:** PR #8 (`c4b1f3b` — Merge PR #8: refactor(remote): migrate Firestore to UUID-keyed documents with bidirectional sync).
 
 **Branches de feature existentes (não apagar):**
 - `refactor/pr1-riverpod-scaffold`
@@ -174,36 +174,36 @@ Stubs de UUID em teste: implementam `Uuid` via `noSuchMethod` (ver `_FixedUuid` 
 - `refactor/pr6-tablet-assignment`
 - `refactor/pr6.5-flavors`
 - `refactor/pr7-person-repo`
+- `refactor/pr8-firestore-uuid`
 
-**Testes:** 33 passando.
+**Testes:** 39 passando em `main` após o merge do PR #8.
 
-**Próximo PR planejado: PR #8** — `refactor(remote): migrate Firestore to UUID-keyed documents with bidirectional sync`.
+**Próximo PR planejado: PR #9** — `refactor(access): split AccessScreen into controller and focused widgets`.
 
-### Escopo do PR #8 (resumo — ver handoff completo para detalhes)
+### Escopo do PR #9 (resumo — ver handoff completo para detalhes)
 
-Hoje o Firestore ainda é keyed por `name` — o Hive local já foi para UUID no PR #7, então há uma "ponte" temporária em `app.dart` que faz lookup name→Person para preservar UUIDs. O PR #8 elimina essa ponte.
+Hoje a `AccessScreen` concentra câmera, reconhecimento manual, pipeline legado de frame, overlay, top bar, botões administrativos e navegação auxiliar num único arquivo grande. O PR #9 deve separar a feature em controller + widgets focados sem alterar intencionalmente a lógica funcional atual.
 
 **Fazer:**
-1. Coleção `people` keyed por `Person.id` (UUID). Fields: `id`, `name`, `roleKey`, `locationIds: array<String>` (substitui `allowedUnits`), `embeddings: map<String,List<double>>`, `createdAt: int`, `updatedAt: serverTimestamp`.
-2. Migração Firestore idempotente (flag em doc `/_meta/migrations` com `{people_v1_to_v2: true}`). Docs antigos **não são deletados** — marcados com `migrated: true`.
-3. Reescrever `FirebaseDatabase`: `savePerson(Person)`, `deletePerson(String id)`, `loadAll({String? locationId}) → Map<String, Person>`.
-4. Remover lookup `byName` em `lib/app/app.dart:_startFirestoreSync`. Sync vira match direto por id.
-5. Remover DTO `PersonRecord` de `firebase_database.dart` (era ponte do PR #7).
-6. Sync bidirecional com resolução last-write-wins por `updatedAt`.
-7. Atualizar call sites: `register_screen.dart`, `people_list_screen.dart`, `app.dart`.
-8. Testes novos em `test/infrastructure/persistence/firebase/` (considerar `fake_cloud_firestore` do pub.dev).
+1. Criar `lib/presentation/access/access_controller.dart` para centralizar estado e orquestração da feature.
+2. Extrair widgets visuais coesos para `lib/presentation/access/widgets/`.
+3. Reduzir a `AccessScreen` a shell/composição + navegação auxiliar.
+4. Preservar o fluxo atual de reconhecimento, cooldowns, threshold e distinção `admin` vs `porta`.
+5. Manter o pipeline técnico atual funcionando, apenas movendo responsabilidades para lugares mais claros.
+6. Adicionar testes do controller e/ou widgets quando fizer sentido para proteger a reorganização.
 
-**Não fazer no PR #8:**
-- Deletar box Hive legada `face_embeddings_v2` (ainda é rollback local — PR posterior, depois de estabilidade).
-- Qualquer mudança em reconhecimento / câmera / matching (PR #9/#10).
-- UI nova.
-- Correção de lints não-relacionados.
+**Não fazer no PR #9:**
+- Não antecipar otimizações pesadas do PR #10 (`isolate`, `compute`, troca de pipeline, tuning de performance).
+- Não alterar intencionalmente threshold, matching, cooldowns ou UX funcional do reconhecimento.
+- Não mexer em Hive/Firestore além do mínimo para compilar.
+- Não duplicar lógica por flavor.
 
 **Critérios de aceitação:**
-- `flutter test` 33/33 + novos testes do PR #8 verdes.
-- `flutter analyze` sem erro novo.
-- Renomear pessoa no admin não quebra identidade (hoje = cria doc duplicado).
-- Sync offline→online→offline converge sem duplicar pessoas.
+- Existe um controller claro para a feature de acesso.
+- A `AccessScreen` fica bem menor e focada em composição.
+- Widgets visuais foram extraídos de forma coesa.
+- `flutter test` continua verde com os novos testes do PR.
+- `flutter analyze` não adiciona problemas novos relevantes.
 
 ---
 
@@ -268,6 +268,16 @@ Formato de cada entrada:
 ```
 
 ---
+
+### 2026-04-21 — Codex (GPT-5) — `refactor/pr9-access-controller`
+**Fiz:** Extraí a feature de acesso em `AccessController` + widgets focados. O controller agora concentra câmera, reconhecimento manual, cooldowns, janela deslizante de decisões, overlay e navegação de pausa/retomada da câmera via API própria. A `AccessScreen` virou shell/composição e a UI foi quebrada em `camera_preview_box.dart`, `access_bottom_bar.dart`, `access_feedback_overlay.dart`, `access_top_bar.dart`, `scan_frame_overlay.dart` e `scan_frame_painter.dart`. Adicionei testes do controller cobrindo smoothing, denied path, cooldown da porta e ciclo de vida do overlay.
+**Deixei em:** branch `refactor/pr9-access-controller` (WIP, pronto para commit). Worktree com mudanças em `lib/presentation/access_screen.dart`, `pubspec.yaml`, `pubspec.lock`, novo diretório `lib/presentation/access/` e novo diretório `test/presentation/access/`.
+**Testes:** 43/43 passando. `flutter analyze`: 23 avisos herdados, 0 erros novos.
+**Próximo passo concreto:** revisar o diff final do PR #9, commitar com mensagem `refactor(access): split AccessScreen into controller and focused widgets` e então abrir a revisão. Os pontos mais sensíveis para sanity-check são `AccessController.recognizeNow()`, `AccessController.registerDecision()` e os fluxos de pausa/retomada da câmera ao abrir `PeopleListScreen` e `RegisterScreen`.
+**Gotchas descobertas:**
+- O pipeline legado de `_processFrame` continua preservado, mas segue não ligado ao stream automático para manter o comportamento atual e não antecipar o PR #10.
+- A compatibilidade com Riverpod ficou via `ChangeNotifierProvider.autoDispose.family`, mas a lógica não foi duplicada por flavor.
+- Os avisos do analyzer caíram porque a extração removeu um `_processFrame` privado não usado e evitou warnings novos nos arquivos criados.
 
 ### 2026-04-21 — Codex (GPT-5) — `refactor/pr8-firestore-uuid`
 **Fiz:** Reescrevi `lib/infrastructure/firebase_database.dart` para o schema remoto keyed por UUID (`id`, `roleKey`, `locationIds`, `createdAt`, `updatedAt`), removi o DTO `PersonRecord`, adicionei migração remota idempotente com flag em `/_meta/migrations`, preservação do doc legado via `migrated: true`, sync bidirecional em `FirebaseDatabase.synchronize(...)` com resolução last-write-wins por `updatedAt` e bridge de compatibilidade para evitar duplicação quando houver mismatch legado por nome. Atualizei `lib/app/app.dart` para delegar o sync ao `FirebaseDatabase`, além dos call sites de cadastro/exclusão em `register_screen.dart` e `people_list_screen.dart` para operar por `Person.id`. Adicionei `fake_cloud_firestore` e uma suíte nova em `test/infrastructure/persistence/firebase/firebase_database_test.dart`.
