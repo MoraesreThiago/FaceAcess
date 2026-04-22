@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../app/flavor.dart';
 import '../app/providers/application_providers.dart';
+import '../app/providers/repository_providers.dart';
 import '../application/result.dart';
 import '../domain/entities/operator_role.dart';
 import '../domain/entities/tablet_assignment.dart';
@@ -162,6 +163,19 @@ class LoginScreen extends ConsumerWidget {
     final role = flavor == AppFlavor.admin
         ? OperatorRole.admin
         : OperatorRole.porta;
+    final assignmentConfigured = assignment?.isConfigured ?? false;
+    final locationId = assignment?.locationId;
+    final doorId = assignment?.doorId;
+    final location = locationId == null
+        ? null
+        : ref.watch(locationByIdProvider(locationId)).valueOrNull;
+    final door =
+        doorId == null ? null : ref.watch(doorByIdProvider(doorId)).valueOrNull;
+    final footerLabel = _buildFooterLabel(
+      assignmentConfigured: assignmentConfigured,
+      locationName: location?.name ?? locationId,
+      doorName: door?.name ?? doorId,
+    );
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0A),
       body: SafeArea(
@@ -257,18 +271,45 @@ class LoginScreen extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.only(bottom: 24),
               child: Text(
-                (assignment?.locationId != null &&
-                        assignment!.locationId!.isNotEmpty)
-                    ? 'Unidade: ${assignment!.locationId![0].toUpperCase()}${assignment!.locationId!.substring(1)}'
-                    : '',
-                style:
-                    const TextStyle(color: Colors.white12, fontSize: 12),
+                footerLabel,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white24, fontSize: 12),
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  String _buildFooterLabel({
+    required bool assignmentConfigured,
+    String? locationName,
+    String? doorName,
+  }) {
+    if (!assignmentConfigured) {
+      return 'Configuracao do tablet pendente';
+    }
+
+    final normalizedLocation = locationName?.trim();
+    final normalizedDoor = doorName?.trim();
+
+    if (normalizedLocation != null &&
+        normalizedLocation.isNotEmpty &&
+        normalizedDoor != null &&
+        normalizedDoor.isNotEmpty) {
+      return 'Unidade: $normalizedLocation • Porta: $normalizedDoor';
+    }
+
+    if (normalizedDoor != null && normalizedDoor.isNotEmpty) {
+      return 'Porta: $normalizedDoor';
+    }
+
+    if (normalizedLocation != null && normalizedLocation.isNotEmpty) {
+      return 'Unidade: $normalizedLocation';
+    }
+
+    return 'Configuracao do tablet pendente';
   }
 }
 

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../app/flavor.dart';
+import '../app/providers/infrastructure_providers.dart';
 import '../app/providers/repository_providers.dart';
 import '../application/use_cases/evaluate_access_use_case.dart';
 import '../domain/entities/operator_role.dart';
@@ -22,6 +23,7 @@ import 'access/widgets/camera_preview_box.dart';
 import 'access/widgets/scan_frame_overlay.dart';
 import 'people_list_screen.dart';
 import 'register_screen.dart';
+import 'tablet_setup_screen.dart';
 
 class AccessScreen extends ConsumerWidget {
   const AccessScreen({
@@ -68,6 +70,16 @@ class AccessScreen extends ConsumerWidget {
     final state = controller.state;
     final isAdmin =
         profile == OperatorRole.admin && flavor == AppFlavor.admin;
+    final assignmentConfigured = tabletAssignment?.isConfigured ?? false;
+    final locationId = tabletAssignment?.locationId;
+    final doorId = tabletAssignment?.doorId;
+    final location = locationId == null
+        ? null
+        : ref.watch(locationByIdProvider(locationId)).valueOrNull;
+    final door =
+        doorId == null ? null : ref.watch(doorByIdProvider(doorId)).valueOrNull;
+    final locationLabel = location?.name ?? locationId;
+    final doorLabel = door?.name ?? doorId;
 
     Future<void> openPeopleList() async {
       await controller.pauseCamera();
@@ -102,13 +114,35 @@ class AccessScreen extends ConsumerWidget {
             faceRecognizer: faceRecognizer,
             personRepository: personRepository,
             firebaseDatabase: firebaseDatabase,
-            locationId: tabletAssignment?.locationId,
+            locationId: assignmentConfigured ? tabletAssignment?.locationId : null,
           ),
         ),
       );
 
       if (!context.mounted) return;
       await controller.resumeCamera(fullReinit: true);
+    }
+
+    Future<void> openTabletSetup() async {
+      await controller.pauseCamera();
+      if (!context.mounted) return;
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => TabletSetupScreen(
+            identity: tabletIdentity,
+            initialAssignment: tabletAssignment,
+            onDone: () {
+              ref.invalidate(tabletIdentityProvider);
+              ref.invalidate(tabletAssignmentProvider);
+            },
+          ),
+        ),
+      );
+
+      if (!context.mounted) return;
+      await controller.resumeCamera(fullReinit: false);
     }
 
     Future<void> recognizeNow() async {
@@ -136,6 +170,7 @@ class AccessScreen extends ConsumerWidget {
             isRecognizing: state.isRecognizing,
             onShowPeople: isAdmin ? openPeopleList : null,
             onRegister: isAdmin ? openRegisterScreen : null,
+            onConfigureTablet: isAdmin ? openTabletSetup : null,
             onRecognize: recognizeNow,
           ),
           if (state.lastDecision != null)
@@ -144,7 +179,12 @@ class AccessScreen extends ConsumerWidget {
               decision: state.lastDecision!,
               greeting: controller.currentGreeting,
             ),
-          const AccessTopBar(),
+          AccessTopBar(
+            tabletName: tabletIdentity.name,
+            assignmentConfigured: assignmentConfigured,
+            locationName: locationLabel,
+            doorName: doorLabel,
+          ),
         ],
       ),
     );

@@ -57,7 +57,7 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
   void _startFirestoreSync({
     required FirebaseDatabase firebaseDatabase,
     required PersonRepository personRepository,
-    required String unit,
+    required String locationId,
   }) {
     if (_syncStarted) return;
     _syncStarted = true;
@@ -65,7 +65,7 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
       try {
         await firebaseDatabase.synchronize(
           personRepository: personRepository,
-          locationId: unit.isNotEmpty ? unit : null,
+          locationId: locationId.isNotEmpty ? locationId : null,
         );
       } catch (_) {
         // Sem conexão — usa cache local do PersonRepository.
@@ -114,7 +114,7 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
       _startFirestoreSync(
         firebaseDatabase: firebaseDatabase,
         personRepository: personRepository.requireValue,
-        unit: assignmentValue?.locationId ?? '',
+        locationId: assignmentValue?.locationId ?? '',
       );
 
       home = _buildHome(
@@ -172,9 +172,10 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
       );
     }
 
-    if (assignment == null) {
+    if (assignment == null || !assignment.isConfigured) {
       return TabletSetupScreen(
         identity: identity,
+        initialAssignment: assignment,
         onDone: _onSetupDone,
       );
     }
@@ -218,7 +219,8 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
       accessLogService: AccessLogService(
         tabletId: identity.id,
         tabletName: identity.name,
-        unit: assignment?.locationId ?? '',
+        locationId: assignment?.locationId ?? '',
+        doorId: assignment?.doorId ?? '',
       ),
       profile: profile,
     );

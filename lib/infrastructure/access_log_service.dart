@@ -7,12 +7,14 @@ class AccessLogService {
 
   final String tabletId;
   final String tabletName;
-  final String unit;
+  final String locationId;
+  final String doorId;
 
   AccessLogService({
     required this.tabletId,
     required this.tabletName,
-    required this.unit,
+    required this.locationId,
+    required this.doorId,
   });
 
   Future<void> log({
@@ -27,7 +29,9 @@ class AccessLogService {
         'role': role,
         'tabletId': tabletId,
         'tabletName': tabletName,
-        'unit': unit,
+        'locationId': locationId,
+        'doorId': doorId,
+        'unit': locationId,
         'timestamp': FieldValue.serverTimestamp(),
       });
     } catch (_) {
