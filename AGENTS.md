@@ -1,4 +1,4 @@
-﻿# AGENTS.md — Protocolo para IAs trabalhando neste repositório
+# AGENTS.md — Protocolo para IAs trabalhando neste repositório
 
 > **Leia este arquivo inteiro antes de executar qualquer ação no projeto.**
 > Vale para Claude Code, Codex, Copilot Chat, Cursor, e qualquer outro agente que abra este repo.
@@ -6,17 +6,14 @@
 
 ---
 
-
 ## 0. Identidade do projeto em 30 segundos
-
-> Atualização 2026-04-21: PR #9 já foi mergeado em `main` (`402113c`). O próximo PR planejado é o **PR #10** (`perf(access): optimize recognition pipeline with isolate-friendly image processing`).
 
 - **App:** FaceAccess (marca comercial "BemBrasil") — controle de acesso por reconhecimento facial em tablets Android.
 - **Dois flavors de APK, mesma base de código:** `admin` (gestão) e `porta` (reconhecimento na parede).
 - **Duas unidades:** Araxá (~300 pessoas) e Perdizes (~1000).
 - **Stack:** Flutter/Dart 3.3+, Riverpod, Hive (local), Firestore (sync remoto), MQTT (relé ESP32), ML Kit + TFLite FaceNet 512-d.
 - **Arquitetura:** Clean architecture frouxa (`domain/` / `application/` / `infrastructure/` / `presentation/`), composition root em `lib/app/providers/`.
-- **Estado atual:** em refatoracao disciplinada por PRs sequenciais. PR #1 a **PR #9 ja em `main`**. Proximo: **PR #10**.
+- **Estado atual:** em refatoração disciplinada por PRs sequenciais. PR #1 a **PR #8 já em `main`**. Próximo: **PR #9**.
 
 Para o contexto completo, leia `docs/HANDOFF.md` se existir; caso contrário, leia a seção **Estado atual** abaixo e consulte o histórico do git (`git log --oneline`).
 
@@ -166,8 +163,6 @@ Stubs de UUID em teste: implementam `Uuid` via `noSuchMethod` (ver `_FixedUuid` 
 
 ## 7. Estado atual (atualize quando mergear um PR)
 
-> Atualização 2026-04-21: `main` já contém o merge do PR #9 (`402113c`) e o próximo trabalho em andamento é o PR #10 (`perf(access): optimize recognition pipeline with isolate-friendly image processing`). Em `main`, a suíte está em 43 testes passando; na branch do PR #10, 46 testes passam.
-
 **Último PR merged em `main`:** PR #8 (`c4b1f3b` — Merge PR #8: refactor(remote): migrate Firestore to UUID-keyed documents with bidirectional sync).
 
 **Branches de feature existentes (não apagar):**
@@ -180,12 +175,10 @@ Stubs de UUID em teste: implementam `Uuid` via `noSuchMethod` (ver `_FixedUuid` 
 - `refactor/pr6.5-flavors`
 - `refactor/pr7-person-repo`
 - `refactor/pr8-firestore-uuid`
-- `refactor/pr9-access-controller`
-- `refactor/pr10-access-performance`
 
 **Testes:** 39 passando em `main` após o merge do PR #8.
 
-**Proximo PR planejado: PR #10** - `perf(access): optimize recognition pipeline with isolate-friendly image processing`.
+**Próximo PR planejado: PR #9** — `refactor(access): split AccessScreen into controller and focused widgets`.
 
 ### Escopo do PR #9 (resumo — ver handoff completo para detalhes)
 
@@ -275,16 +268,6 @@ Formato de cada entrada:
 ```
 
 ---
-
-### 2026-04-21 - Codex (GPT-5) - `refactor/pr10-access-performance`
-**Fiz:** Mergeei o PR #9 em `main` com `--no-ff` (`402113c`) e abri a branch `refactor/pr10-access-performance`. Extrai o payload serializavel `CameraFramePayload`, criei `lib/infrastructure/face/face_image_preprocessor.dart` para mover para `compute()` a parte CPU-bound de YUV420 -> RGB, rotacao, crop, resize e normalizacao do tensor, e integrei isso ao `AccessController` sem religar o stream automatico. Ajustei `FaceRecognizer` para aceitar tensor ja preparado (`getEmbeddingFromInputTensor`) e adicionei testes unitarios da infraestrutura nova.
-**Deixei em:** branch `refactor/pr10-access-performance` (dirty, pronto para commit). Worktree com mudancas em `AGENTS.md`, `lib/infrastructure/face_recognizer.dart`, `lib/presentation/access/access_controller.dart`, novos arquivos em `lib/infrastructure/face/` e novo teste em `test/infrastructure/face/`.
-**Testes:** 46/46 passando. `flutter analyze`: 22 avisos herdados, 0 problemas novos do PR.
-**Proximo passo concreto:** revisar o diff final do PR #10, commitar com mensagem `perf(access): optimize recognition pipeline with isolate-friendly image processing` e entao abrir a revisao. Os pontos mais sensiveis para sanity-check sao `AccessController._extractEmbedding()`, `buildNv21Bytes()` e `preprocessFaceTensorOnIsolate()`.
-**Gotchas descobertas:**
-- `CameraImage` nao foi enviado diretamente para `compute()`. O PR cria um payload serializavel explicito para manter a fronteira do isolate segura.
-- `ML Kit` e `TFLite` permaneceram na thread principal por risco baixo: sao dependencias/plugin/interpreter, enquanto o offload ficou restrito ao processamento de imagem em Dart puro.
-- `_processFrame` continua fora do stream automatico. O PR so barateia o pipeline; nao muda o comportamento funcional nem antecipa PR #11/#12.
 
 ### 2026-04-21 — Codex (GPT-5) — `refactor/pr9-access-controller`
 **Fiz:** Extraí a feature de acesso em `AccessController` + widgets focados. O controller agora concentra câmera, reconhecimento manual, cooldowns, janela deslizante de decisões, overlay e navegação de pausa/retomada da câmera via API própria. A `AccessScreen` virou shell/composição e a UI foi quebrada em `camera_preview_box.dart`, `access_bottom_bar.dart`, `access_feedback_overlay.dart`, `access_top_bar.dart`, `scan_frame_overlay.dart` e `scan_frame_painter.dart`. Adicionei testes do controller cobrindo smoothing, denied path, cooldown da porta e ciclo de vida do overlay.
