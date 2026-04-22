@@ -7,8 +7,6 @@ import '../infrastructure/firebase_database.dart';
 
 /// Lista e remove pessoas cadastradas. A partir do PR #7 opera sobre o
 /// [PersonRepository] (UUID-keyed) em vez do antigo `FaceDatabase`.
-/// O Firebase continua sendo removido por nome — a redesenhagem do
-/// lado remoto é escopo do PR #8.
 class PeopleListScreen extends StatefulWidget {
   final PersonRepository personRepository;
   final FirebaseDatabase firebaseDatabase;
@@ -73,8 +71,7 @@ class _PeopleListScreenState extends State<PeopleListScreen> {
     if (confirm == true) {
       await widget.personRepository.deleteById(person.id);
       try {
-        // Firebase continua keyed por nome nesta fase (ver PR #8).
-        await widget.firebaseDatabase.deletePerson(person.name);
+        await widget.firebaseDatabase.deletePerson(person.id);
       } catch (_) {}
       await _load();
       if (mounted) {
@@ -186,12 +183,12 @@ class _PeopleListScreenState extends State<PeopleListScreen> {
                           return Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: Chip(
-                              avatar: Icon(role.icon,
-                                  size: 14, color: role.color),
+                              avatar:
+                                  Icon(role.icon, size: 14, color: role.color),
                               label: Text(
                                 '${role.label}: $count',
-                                style: TextStyle(
-                                    color: role.color, fontSize: 12),
+                                style:
+                                    TextStyle(color: role.color, fontSize: 12),
                               ),
                               backgroundColor: role.color.withOpacity(0.12),
                               side: BorderSide(
@@ -227,8 +224,7 @@ class _PeopleListScreenState extends State<PeopleListScreen> {
                           padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                           itemCount: grouped.length,
                           itemBuilder: (_, sectionIndex) {
-                            final role =
-                                grouped.keys.elementAt(sectionIndex);
+                            final role = grouped.keys.elementAt(sectionIndex);
                             final people = grouped[role]!;
 
                             return Column(
@@ -313,8 +309,7 @@ class _PersonCard extends StatelessWidget {
         border: Border.all(color: role.color.withOpacity(0.25)),
       ),
       child: ListTile(
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: Container(
           width: 48,
           height: 48,
@@ -338,8 +333,7 @@ class _PersonCard extends StatelessWidget {
           child: Row(
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: role.color.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(10),
@@ -358,8 +352,7 @@ class _PersonCard extends StatelessWidget {
               const SizedBox(width: 4),
               Text(
                 '$photoCount fotos',
-                style:
-                    const TextStyle(color: Colors.white38, fontSize: 12),
+                style: const TextStyle(color: Colors.white38, fontSize: 12),
               ),
             ],
           ),

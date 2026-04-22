@@ -213,15 +213,9 @@ class _RegisterScreenState extends State<RegisterScreen>
       );
       await widget.personRepository.save(person);
 
-      // Salva no Firebase para sincronizar com outros tablets.
-      // O lado remoto continua keyed por nome nesta fase (PR #8
-      // cuidará da migração do Firestore).
-      await widget.firebaseDatabase.savePerson(
-        name,
-        _capturedEmbeddings,
-        role: _selectedRole,
-        allowedUnits: locationIds.toList(growable: false),
-      );
+      // Salva no Firebase para sincronizar com outros tablets usando
+      // o mesmo UUID estável do cadastro local.
+      await widget.firebaseDatabase.savePerson(person);
 
       if (mounted) {
         _showSnack('✅ $name (${_selectedRole.label}) cadastrado com sucesso!');
@@ -235,8 +229,8 @@ class _RegisterScreenState extends State<RegisterScreen>
     }
   }
 
-  void _showSnack(String msg) => ScaffoldMessenger.of(context)
-      .showSnackBar(SnackBar(content: Text(msg)));
+  void _showSnack(String msg) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
 
   @override
   Widget build(BuildContext context) {
@@ -344,7 +338,8 @@ class _RegisterScreenState extends State<RegisterScreen>
                       borderRadius: BorderRadius.circular(8),
                     ),
                     focusedBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: _selectedRole.color, width: 2),
+                      borderSide:
+                          BorderSide(color: _selectedRole.color, width: 2),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     filled: true,
@@ -374,7 +369,8 @@ class _RegisterScreenState extends State<RegisterScreen>
                       onTap: () => setState(() => _selectedRole = role),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
                           color: selected
                               ? role.color.withOpacity(0.25)
@@ -416,14 +412,17 @@ class _RegisterScreenState extends State<RegisterScreen>
                   scale: Tween(begin: 1.0, end: 0.93).animate(_captureAnim),
                   child: GestureDetector(
                     onTapDown: (_) {
-                      if (!_isCapturing && _capturedEmbeddings.length < _maxPhotos) {
+                      if (!_isCapturing &&
+                          _capturedEmbeddings.length < _maxPhotos) {
                         _startAutoCapture();
                       }
                     },
                     onTapUp: (_) => _stopAutoCapture(),
                     onTapCancel: _stopAutoCapture,
                     child: ElevatedButton.icon(
-                      onPressed: _capturedEmbeddings.length >= _maxPhotos ? null : () {},
+                      onPressed: _capturedEmbeddings.length >= _maxPhotos
+                          ? null
+                          : () {},
                       icon: _isCapturing
                           ? const SizedBox(
                               width: 18,
@@ -523,8 +522,9 @@ class _FaceFramePainter extends CustomPainter {
       ..strokeWidth = 2.5
       ..style = PaintingStyle.stroke;
 
-    canvas.drawOval(Rect.fromCenter(
-        center: Offset(cx, cy), width: rx * 2, height: ry * 2), paint);
+    canvas.drawOval(
+        Rect.fromCenter(center: Offset(cx, cy), width: rx * 2, height: ry * 2),
+        paint);
   }
 
   @override
@@ -596,7 +596,12 @@ class _RingPainter extends CustomPainter {
     final radius = size.width / 2 - 6;
 
     canvas.drawCircle(
-        center, radius, Paint()..color = Colors.white12..strokeWidth = 5..style = PaintingStyle.stroke);
+        center,
+        radius,
+        Paint()
+          ..color = Colors.white12
+          ..strokeWidth = 5
+          ..style = PaintingStyle.stroke);
 
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),

@@ -1,12 +1,9 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart';
 
 import '../application/use_cases/evaluate_access_use_case.dart';
-import '../domain/entities/face_embedding.dart';
 import '../domain/entities/operator_role.dart';
-import '../domain/entities/person.dart';
 import '../domain/entities/tablet_assignment.dart';
 import '../domain/entities/tablet_identity.dart';
 import '../domain/repositories/person_repository.dart';
@@ -33,10 +30,8 @@ import 'providers/repository_providers.dart';
 /// 4. Preservar o roteamento legado: login → (admin direto | porta →
 ///    setup? → access).
 ///
-/// PR #7: o sync agora escreve no [PersonRepository] (UUID-keyed). Como
-/// o Firestore ainda é keyed por nome (a migração remota é PR #8), o sync
-/// faz um lookup name→Person local para preservar/reutilizar o UUID
-/// estável das pessoas já conhecidas.
+/// PR #8: o sync remoto agora é keyed por UUID e a reconciliação
+/// Firestore ↔ Hive mora em [FirebaseDatabase].
 class FaceAccessApp extends ConsumerStatefulWidget {
   const FaceAccessApp({super.key});
 
@@ -47,7 +42,6 @@ class FaceAccessApp extends ConsumerStatefulWidget {
 class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
   OperatorRole? _loggedProfile;
   bool _syncStarted = false;
-  final Uuid _uuid = const Uuid();
 
   void _onLogin(OperatorRole profile) =>
       setState(() => _loggedProfile = profile);
@@ -57,17 +51,9 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
   /// o rebuild caso a árvore esteja ativa (defensivo).
   void _onSetupDone() => setState(() {});
 
-  /// Sincroniza Firestore → `PersonRepository` na inicialização (somente
-  /// pessoas da unidade). "Fire and forget": erros são silenciosos e o
-  /// app segue operando pelo cache local.
-  ///
-  /// Estratégia de UUID durante o sync (enquanto o Firestore continuar
-  /// keyed por nome, até o PR #8):
-  /// - Pessoa já existe localmente com o mesmo `name` → reusa `id` e
-  ///   `createdAt`; embeddings/role são atualizados e o `locationId` do
-  ///   tablet entra no conjunto `locationIds`.
-  /// - Pessoa nova → gera UUID novo, `createdAt = now`, e o `locationId`
-  ///   do tablet é o ponto de partida de `locationIds`.
+  /// Sincroniza Firestore ↔ `PersonRepository` na inicialização.
+  /// "Fire and forget": erros são silenciosos e o app segue operando
+  /// pelo cache local.
   void _startFirestoreSync({
     required FirebaseDatabase firebaseDatabase,
     required PersonRepository personRepository,
@@ -77,38 +63,10 @@ class _FaceAccessAppState extends ConsumerState<FaceAccessApp> {
     _syncStarted = true;
     Future(() async {
       try {
-        final remote = await firebaseDatabase.loadAll(
-          unit: unit.isNotEmpty ? unit : null,
+        await firebaseDatabase.synchronize(
+          personRepository: personRepository,
+          locationId: unit.isNotEmpty ? unit : null,
         );
-
-        final existing = await personRepository.findAll();
-        final byName = <String, Person>{
-          for (final p in existing) p.name: p,
-        };
-
-        for (final entry in remote.entries) {
-          final name = entry.key;
-          final record = entry.value;
-          final prev = byName[name];
-          final id = prev?.id ?? _uuid.v4();
-          final createdAt = prev?.createdAt ?? DateTime.now().toUtc();
-          final locationIds = <String>{
-            ...(prev?.locationIds ?? const <String>{}),
-            if (unit.isNotEmpty) unit,
-          };
-          await personRepository.save(
-            Person(
-              id: id,
-              name: name,
-              role: record.role,
-              locationIds: locationIds,
-              embeddings: [
-                for (final e in record.embeddings) FaceEmbedding(e),
-              ],
-              createdAt: createdAt,
-            ),
-          );
-        }
       } catch (_) {
         // Sem conexão — usa cache local do PersonRepository.
       }
@@ -295,7 +253,8 @@ class _ErrorScreen extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, size: 64, color: Colors.redAccent),
+              const Icon(Icons.error_outline,
+                  size: 64, color: Colors.redAccent),
               const SizedBox(height: 16),
               const Text(
                 'Falha ao inicializar o aplicativo',
