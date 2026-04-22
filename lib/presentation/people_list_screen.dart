@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
 
+import '../domain/entities/person.dart';
 import '../domain/entities/user_role.dart';
-import '../infrastructure/face_database.dart';
+import '../domain/repositories/person_repository.dart';
 import '../infrastructure/firebase_database.dart';
 
+/// Lista e remove pessoas cadastradas. A partir do PR #7 opera sobre o
+/// [PersonRepository] (UUID-keyed) em vez do antigo `FaceDatabase`.
+/// O Firebase continua sendo removido por nome — a redesenhagem do
+/// lado remoto é escopo do PR #8.
 class PeopleListScreen extends StatefulWidget {
-  final FaceDatabase faceDatabase;
+  final PersonRepository personRepository;
   final FirebaseDatabase firebaseDatabase;
   const PeopleListScreen({
     super.key,
-    required this.faceDatabase,
+    required this.personRepository,
     required this.firebaseDatabase,
   });
 
@@ -18,7 +23,7 @@ class PeopleListScreen extends StatefulWidget {
 }
 
 class _PeopleListScreenState extends State<PeopleListScreen> {
-  Map<String, PersonRecord> _people = {};
+  List<Person> _people = [];
   bool _loading = true;
   String _search = '';
 
@@ -30,14 +35,16 @@ class _PeopleListScreenState extends State<PeopleListScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final data = await widget.faceDatabase.loadAll();
-    if (mounted) setState(() {
-      _people = data;
-      _loading = false;
-    });
+    final data = await widget.personRepository.findAll();
+    if (mounted) {
+      setState(() {
+        _people = data;
+        _loading = false;
+      });
+    }
   }
 
-  Future<void> _deletePerson(String name) async {
+  Future<void> _deletePerson(Person person) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -45,7 +52,7 @@ class _PeopleListScreenState extends State<PeopleListScreen> {
         title: const Text('Confirmar exclusão',
             style: TextStyle(color: Colors.white)),
         content: Text(
-          'Deseja remover "$name" do sistema?',
+          'Deseja remover "${person.name}" do sistema?',
           style: const TextStyle(color: Colors.white70),
         ),
         actions: [
@@ -64,15 +71,16 @@ class _PeopleListScreenState extends State<PeopleListScreen> {
     );
 
     if (confirm == true) {
-      await widget.faceDatabase.deletePerson(name);
+      await widget.personRepository.deleteById(person.id);
       try {
-        await widget.firebaseDatabase.deletePerson(name);
+        // Firebase continua keyed por nome nesta fase (ver PR #8).
+        await widget.firebaseDatabase.deletePerson(person.name);
       } catch (_) {}
       await _load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('$name removido com sucesso'),
+            content: Text('${person.name} removido com sucesso'),
             backgroundColor: Colors.red[700],
           ),
         );
@@ -82,23 +90,23 @@ class _PeopleListScreenState extends State<PeopleListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _people.entries
-        .where((e) =>
-            e.key.toLowerCase().contains(_search.toLowerCase()) ||
-            e.value.role.label.toLowerCase().contains(_search.toLowerCase()))
+    final searchLower = _search.toLowerCase();
+    final filtered = _people
+        .where((p) =>
+            p.name.toLowerCase().contains(searchLower) ||
+            p.role.label.toLowerCase().contains(searchLower))
         .toList()
       ..sort((a, b) {
         // Sort by role priority then name
-        final roleCmp =
-            a.value.role.index.compareTo(b.value.role.index);
+        final roleCmp = a.role.index.compareTo(b.role.index);
         if (roleCmp != 0) return roleCmp;
-        return a.key.compareTo(b.key);
+        return a.name.compareTo(b.name);
       });
 
     // Group by role
-    final grouped = <UserRole, List<MapEntry<String, PersonRecord>>>{};
-    for (final entry in filtered) {
-      grouped.putIfAbsent(entry.value.role, () => []).add(entry);
+    final grouped = <UserRole, List<Person>>{};
+    for (final person in filtered) {
+      grouped.putIfAbsent(person.role, () => []).add(person);
     }
 
     return Scaffold(
@@ -172,9 +180,8 @@ class _PeopleListScreenState extends State<PeopleListScreen> {
                       scrollDirection: Axis.horizontal,
                       child: Row(
                         children: UserRole.values.map((role) {
-                          final count = _people.values
-                              .where((p) => p.role == role)
-                              .length;
+                          final count =
+                              _people.where((p) => p.role == role).length;
                           if (count == 0) return const SizedBox.shrink();
                           return Padding(
                             padding: const EdgeInsets.only(right: 8),
@@ -264,11 +271,9 @@ class _PeopleListScreenState extends State<PeopleListScreen> {
                                 ),
 
                                 // People cards
-                                ...people.map((entry) => _PersonCard(
-                                      name: entry.key,
-                                      record: entry.value,
-                                      onDelete: () =>
-                                          _deletePerson(entry.key),
+                                ...people.map((person) => _PersonCard(
+                                      person: person,
+                                      onDelete: () => _deletePerson(person),
                                     )),
                               ],
                             );
@@ -287,20 +292,18 @@ class _PeopleListScreenState extends State<PeopleListScreen> {
 }
 
 class _PersonCard extends StatelessWidget {
-  final String name;
-  final PersonRecord record;
+  final Person person;
   final VoidCallback onDelete;
 
   const _PersonCard({
-    required this.name,
-    required this.record,
+    required this.person,
     required this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
-    final role = record.role;
-    final photoCount = record.embeddings.length;
+    final role = person.role;
+    final photoCount = person.embeddings.length;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -323,7 +326,7 @@ class _PersonCard extends StatelessWidget {
           child: Icon(role.icon, color: role.color, size: 24),
         ),
         title: Text(
-          name,
+          person.name,
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.w600,
@@ -350,7 +353,7 @@ class _PersonCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Icon(Icons.photo_library_outlined,
+              const Icon(Icons.photo_library_outlined,
                   size: 13, color: Colors.white38),
               const SizedBox(width: 4),
               Text(

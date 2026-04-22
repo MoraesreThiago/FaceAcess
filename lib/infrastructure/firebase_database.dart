@@ -1,7 +1,20 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../domain/entities/user_role.dart';
-import '../infrastructure/face_database.dart';
+
+/// DTO interno do sync remoto.
+///
+/// Até o PR #6 este tipo vivia em `face_database.dart`. Foi movido para
+/// cá no PR #7 porque o `FaceDatabase` legado foi removido e esta classe
+/// continua sendo o "envelope de leitura" do Firestore. A redesenhagem
+/// do lado remoto (Firestore keyed por UUID, com sync bidirecional)
+/// é escopo do PR #8 — nada foi alterado aqui além do necessário para
+/// o código compilar sem o `FaceDatabase`.
+class PersonRecord {
+  final UserRole role;
+  final List<List<double>> embeddings;
+  const PersonRecord({required this.role, required this.embeddings});
+}
 
 /// Sincroniza pessoas com o Firestore.
 /// Embeddings são salvos como Map<String, List<double>> porque o Firestore

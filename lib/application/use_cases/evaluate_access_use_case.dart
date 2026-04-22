@@ -1,40 +1,46 @@
 import 'dart:math';
 
 import '../../domain/entities/access_decision.dart';
-import '../../infrastructure/face_database.dart';
+import '../../domain/entities/person.dart';
+import '../../domain/repositories/person_repository.dart';
 
+/// Avalia um embedding de query contra todas as pessoas conhecidas e
+/// decide se o acesso é autorizado.
+///
+/// PR #7: passou a depender do contrato `PersonRepository` em vez do
+/// `FaceDatabase` concreto. A **lógica de matching** (cosine distance,
+/// threshold 0.45) é intencionalmente idêntica à anterior — alterações
+/// na lógica de reconhecimento são escopo de PRs futuros (#9/#10).
 class EvaluateAccessUseCase {
-  final FaceDatabase _faceDatabase;
+  EvaluateAccessUseCase({required PersonRepository personRepository})
+      : _personRepository = personRepository;
+
+  final PersonRepository _personRepository;
 
   // Cosine distance threshold — lower is stricter.
   // 0.45 is a good balance between security and usability for FaceNet 512-d.
   static const double _threshold = 0.45;
 
-  EvaluateAccessUseCase({required FaceDatabase faceDatabase})
-      : _faceDatabase = faceDatabase;
-
   Future<AccessDecision> execute(List<double> queryEmbedding) async {
-    final db = await _faceDatabase.loadAll();
+    final people = await _personRepository.findAll();
 
-    String? bestMatch;
-    PersonRecord? bestRecord;
+    Person? bestMatch;
     double bestDistance = double.infinity;
 
-    for (final entry in db.entries) {
-      for (final stored in entry.value.embeddings) {
-        final d = _cosineDistance(queryEmbedding, stored);
+    for (final person in people) {
+      for (final stored in person.embeddings) {
+        final d = _cosineDistance(queryEmbedding, stored.values);
         if (d < bestDistance) {
           bestDistance = d;
-          bestMatch = entry.key;
-          bestRecord = entry.value;
+          bestMatch = person;
         }
       }
     }
 
-    if (bestMatch != null && bestRecord != null && bestDistance <= _threshold) {
+    if (bestMatch != null && bestDistance <= _threshold) {
       return AccessDecision.authorized(
-        personName: bestMatch,
-        role: bestRecord.role,
+        personName: bestMatch.name,
+        role: bestMatch.role,
         confidence: 1.0 - bestDistance,
       );
     }

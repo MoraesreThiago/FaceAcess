@@ -6,16 +6,19 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:image/image.dart' as img;
+import 'package:uuid/uuid.dart';
 
+import '../domain/entities/face_embedding.dart';
+import '../domain/entities/person.dart';
 import '../domain/entities/user_role.dart';
-import '../infrastructure/face_database.dart';
+import '../domain/repositories/person_repository.dart';
 import '../infrastructure/face_recognizer.dart';
 import '../infrastructure/firebase_database.dart';
 
 class RegisterScreen extends StatefulWidget {
   final List<CameraDescription> cameras;
   final FaceRecognizer faceRecognizer;
-  final FaceDatabase faceDatabase;
+  final PersonRepository personRepository;
   final FirebaseDatabase firebaseDatabase;
 
   /// Unidade em que a pessoa está sendo cadastrada. `null` significa
@@ -27,7 +30,7 @@ class RegisterScreen extends StatefulWidget {
     super.key,
     required this.cameras,
     required this.faceRecognizer,
-    required this.faceDatabase,
+    required this.personRepository,
     required this.firebaseDatabase,
     required this.locationId,
   });
@@ -192,22 +195,32 @@ class _RegisterScreenState extends State<RegisterScreen>
     setState(() => _isSaving = true);
 
     try {
-      // Salva local (Hive) para reconhecimento rápido offline
-      await widget.faceDatabase.savePerson(
-        name,
-        _capturedEmbeddings,
+      // Salva local (Hive) para reconhecimento rápido offline.
+      // PR #7: UUID estável por pessoa; nome vira apenas atributo.
+      final locationIds = <String>{
+        if (widget.locationId != null && widget.locationId!.isNotEmpty)
+          widget.locationId!,
+      };
+      final person = Person(
+        id: const Uuid().v4(),
+        name: name,
         role: _selectedRole,
+        locationIds: locationIds,
+        embeddings: [
+          for (final e in _capturedEmbeddings) FaceEmbedding(e),
+        ],
+        createdAt: DateTime.now().toUtc(),
       );
+      await widget.personRepository.save(person);
 
-      // Salva no Firebase para sincronizar com outros tablets
+      // Salva no Firebase para sincronizar com outros tablets.
+      // O lado remoto continua keyed por nome nesta fase (PR #8
+      // cuidará da migração do Firestore).
       await widget.firebaseDatabase.savePerson(
         name,
         _capturedEmbeddings,
         role: _selectedRole,
-        allowedUnits:
-            (widget.locationId != null && widget.locationId!.isNotEmpty)
-                ? [widget.locationId!]
-                : const <String>[],
+        allowedUnits: locationIds.toList(growable: false),
       );
 
       if (mounted) {
