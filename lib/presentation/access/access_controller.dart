@@ -65,6 +65,7 @@ class AccessViewState {
     this.isRecognizing = false,
     this.lastDecision,
     this.overlayVisible = false,
+    this.faceDetected = false,
   });
 
   static const Object _sentinel = Object();
@@ -74,6 +75,10 @@ class AccessViewState {
   final AccessDecision? lastDecision;
   final bool overlayVisible;
 
+  /// Rosto detectado no frame atual pelo ML Kit.
+  /// Atualizado continuamente pelo loop automático — não pelo botão manual.
+  final bool faceDetected;
+
   bool get isCameraReady => cameraController?.value.isInitialized == true;
 
   AccessViewState copyWith({
@@ -81,6 +86,7 @@ class AccessViewState {
     bool? isRecognizing,
     Object? lastDecision = _sentinel,
     bool? overlayVisible,
+    bool? faceDetected,
   }) {
     return AccessViewState(
       cameraController: cameraController == _sentinel
@@ -91,6 +97,7 @@ class AccessViewState {
           ? this.lastDecision
           : lastDecision as AccessDecision?,
       overlayVisible: overlayVisible ?? this.overlayVisible,
+      faceDetected: faceDetected ?? this.faceDetected,
     );
   }
 }
@@ -150,6 +157,14 @@ class AccessController extends ChangeNotifier {
   Timer? _overlayHideTimer;
   Timer? _overlayClearTimer;
   Uint8List? _nv21Buffer;
+
+  // ── Auto-processing ───────────────────────────────────────────────────
+  /// Contador para processar 1 frame a cada [_autoSkip] recebidos.
+  int _frameSkipCounter = 0;
+  static const int _autoSkip = 3;
+
+  /// Guard contra chamadas concorrentes de processFrame no modo automático.
+  bool _autoProcessing = false;
 
   static String greetingFor(DateTime time) {
     final hour = time.hour;
@@ -244,6 +259,11 @@ class AccessController extends ChangeNotifier {
     }
     _graceCyclesWithoutFace = 0;
 
+    // Sinaliza rosto na tela para o overlay reagir.
+    if (!_state.faceDetected) {
+      _updateState(_state.copyWith(faceDetected: true));
+    }
+
     if (_lastExitTime != null) {
       if (_clock().difference(_lastExitTime!).inSeconds < 3) return;
       _lastExitTime = null;
@@ -306,6 +326,11 @@ class AccessController extends ChangeNotifier {
       _lastExitTime = _clock();
     }
     _recentMatches.clear();
+
+    // Remove indicador de rosto após grace period.
+    if (_state.faceDetected) {
+      _updateState(_state.copyWith(faceDetected: false));
+    }
   }
 
   @override
@@ -443,8 +468,30 @@ class AccessController extends ChangeNotifier {
     });
   }
 
+  /// Recebe cada frame da câmera.
+  ///
+  /// Salva o frame para uso manual (botão admin) e dispara o pipeline de
+  /// reconhecimento automático: processa 1 de cada [_autoSkip] frames para
+  /// não sobrecarregar a thread de UI.
   void _onCameraFrame(CameraImage image) {
     _latestFrame = image;
+
+    // Não processa enquanto um resultado está sendo exibido.
+    if (_state.overlayVisible) return;
+
+    // Frame skipping: processa apenas 1 a cada _autoSkip frames.
+    _frameSkipCounter = (_frameSkipCounter + 1) % _autoSkip;
+    if (_frameSkipCounter != 0) return;
+
+    // Evita chamadas concorrentes de processFrame.
+    if (_autoProcessing) return;
+    _autoProcessing = true;
+
+    unawaited(
+      processFrame(image).catchError((_) {}).whenComplete(() {
+        _autoProcessing = false;
+      }),
+    );
   }
 
   void _updateState(AccessViewState newState) {
@@ -543,3 +590,4 @@ class AccessController extends ChangeNotifier {
     } catch (_) {}
   }
 }
+S

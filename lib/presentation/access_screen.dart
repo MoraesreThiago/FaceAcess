@@ -164,14 +164,18 @@ class AccessScreen extends ConsumerWidget {
         fit: StackFit.expand,
         children: [
           CameraPreviewBox(controller: state.cameraController),
-          ScanFrameOverlay(active: !state.overlayVisible),
+          ScanFrameOverlay(
+            active: !state.overlayVisible,
+            faceDetected: state.faceDetected,
+          ),
           AccessBottomBar(
             isAdmin: isAdmin,
             isRecognizing: state.isRecognizing,
             onShowPeople: isAdmin ? openPeopleList : null,
             onRegister: isAdmin ? openRegisterScreen : null,
             onConfigureTablet: isAdmin ? openTabletSetup : null,
-            onRecognize: recognizeNow,
+            // Porta: reconhecimento é automático — botão manual só no admin.
+            onRecognize: isAdmin ? recognizeNow : null,
           ),
           if (state.lastDecision != null)
             AccessFeedbackOverlay(

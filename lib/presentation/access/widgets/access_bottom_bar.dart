@@ -8,7 +8,7 @@ class AccessBottomBar extends StatelessWidget {
     this.onShowPeople,
     this.onRegister,
     this.onConfigureTablet,
-    required this.onRecognize,
+    this.onRecognize,
   });
 
   final bool isAdmin;
@@ -16,10 +16,21 @@ class AccessBottomBar extends StatelessWidget {
   final Future<void> Function()? onShowPeople;
   final Future<void> Function()? onRegister;
   final Future<void> Function()? onConfigureTablet;
-  final Future<void> Function() onRecognize;
+
+  /// null no flavor **porta** — reconhecimento é automático, sem botão.
+  /// não-null no flavor **admin** — permite disparo manual.
+  final Future<void> Function()? onRecognize;
 
   @override
   Widget build(BuildContext context) {
+    // No flavor porta sem admin não há nenhum botão visível.
+    final showAdminButtons = isAdmin;
+    final showRecognizeButton = onRecognize != null;
+
+    if (!showAdminButtons && !showRecognizeButton) {
+      return const SizedBox.shrink();
+    }
+
     return Positioned(
       bottom: 24,
       left: 0,
@@ -28,7 +39,7 @@ class AccessBottomBar extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (isAdmin) ...[
+            if (showAdminButtons) ...[
               ElevatedButton.icon(
                 onPressed: onShowPeople == null ? null : () => onShowPeople!(),
                 icon: const Icon(Icons.people, size: 18),
@@ -77,64 +88,65 @@ class AccessBottomBar extends StatelessWidget {
               ),
               const SizedBox(width: 16),
             ],
-            GestureDetector(
-              onTap: isRecognizing ? null : () => onRecognize(),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 28,
-                  vertical: 14,
-                ),
-                decoration: BoxDecoration(
-                  color: isRecognizing
-                      ? Colors.white12
-                      : Colors.cyanAccent.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: isRecognizing ? Colors.white24 : Colors.cyanAccent,
-                    width: 2,
+            if (showRecognizeButton)
+              GestureDetector(
+                onTap: isRecognizing ? null : () => onRecognize!(),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 28,
+                    vertical: 14,
                   ),
-                  boxShadow: isRecognizing
-                      ? []
-                      : [
-                          BoxShadow(
-                            color: Colors.cyanAccent.withValues(alpha: 0.25),
-                            blurRadius: 12,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                ),
-                child: isRecognizing
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white54,
-                          strokeWidth: 2.5,
-                        ),
-                      )
-                    : const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.face_retouching_natural,
-                            color: Colors.cyanAccent,
-                            size: 22,
-                          ),
-                          SizedBox(width: 10),
-                          Text(
-                            'Reconhecer',
-                            style: TextStyle(
-                              color: Colors.cyanAccent,
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1,
+                  decoration: BoxDecoration(
+                    color: isRecognizing
+                        ? Colors.white12
+                        : Colors.cyanAccent.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isRecognizing ? Colors.white24 : Colors.cyanAccent,
+                      width: 2,
+                    ),
+                    boxShadow: isRecognizing
+                        ? []
+                        : [
+                            BoxShadow(
+                              color: Colors.cyanAccent.withValues(alpha: 0.25),
+                              blurRadius: 12,
+                              spreadRadius: 2,
                             ),
+                          ],
+                  ),
+                  child: isRecognizing
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white54,
+                            strokeWidth: 2.5,
                           ),
-                        ],
-                      ),
+                        )
+                      : const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.face_retouching_natural,
+                              color: Colors.cyanAccent,
+                              size: 22,
+                            ),
+                            SizedBox(width: 10),
+                            Text(
+                              'Reconhecer',
+                              style: TextStyle(
+                                color: Colors.cyanAccent,
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1,
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
               ),
-            ),
           ],
         ),
       ),
